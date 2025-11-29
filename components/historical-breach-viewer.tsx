@@ -9,48 +9,103 @@ import { historicalDataStore } from "@/lib/historical-data-store";
 import type { BreachEvent, Jurisdiction } from "@/types";
 import { AlertTriangle, CheckCircle2, XCircle, Clock, TrendingUp } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import AdvancedFilter, { type AdvancedFilterConfig } from "@/components/advanced-filter";
+import { highlightSearchText } from "@/lib/filter-utils";
 
 export default function HistoricalBreachViewer() {
-  const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
-  const [selectedJurisdiction, setSelectedJurisdiction] = useState<Jurisdiction | "all">("all");
-  const [selectedEventType, setSelectedEventType] = useState<string>("all");
-  const [timeRange, setTimeRange] = useState<string>("24h");
+  const [advancedFilterConfig, setAdvancedFilterConfig] = useState<AdvancedFilterConfig>({});
+  const [useAdvancedFilter, setUseAdvancedFilter] = useState(true);
 
   const breachEvents = useMemo(() => {
-    const now = new Date();
-    let startTime: string | undefined;
-    
-    if (timeRange === "1h") {
-      startTime = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
-    } else if (timeRange === "24h") {
-      startTime = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-    } else if (timeRange === "7d") {
-      startTime = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    } else if (timeRange === "30d") {
-      startTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    }
-    // "all" time range - no startTime filter
-
-    const query: any = {
-      limit: 100,
+    let query: any = {
+      limit: 1000,
     };
-    
-    if (startTime) {
-      query.startTime = startTime;
+
+    // Apply advanced filter config
+    if (useAdvancedFilter && advancedFilterConfig) {
+      if (advancedFilterConfig.searchText?.trim()) {
+        // For breach events, search in ticker
+        query.ticker = advancedFilterConfig.searchText.trim();
+      }
+      
+      if (advancedFilterConfig.jurisdictions && advancedFilterConfig.jurisdictions.length > 0) {
+        // For now, use the first jurisdiction (can be enhanced to support multiple)
+        query.jurisdiction = advancedFilterConfig.jurisdictions[0];
+      }
+
+      if (advancedFilterConfig.lastUpdatedFrom) {
+        query.startTime = advancedFilterConfig.lastUpdatedFrom;
+      }
+      
+      if (advancedFilterConfig.lastUpdatedTo) {
+        query.endTime = advancedFilterConfig.lastUpdatedTo;
+      } else if (!advancedFilterConfig.lastUpdatedFrom) {
+        // Default to last 7 days if no date range specified
+        const now = new Date();
+        query.startTime = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      }
+    } else {
+      // Default to last 24 hours
+      const now = new Date();
+      query.startTime = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
     }
 
-    if (selectedTicker) {
-      query.ticker = selectedTicker;
-    }
-    if (selectedJurisdiction !== "all") {
-      query.jurisdiction = selectedJurisdiction;
-    }
-    if (selectedEventType !== "all") {
-      query.eventType = selectedEventType;
+    let events = historicalDataStore.queryBreachEvents(query);
+
+    // Apply additional client-side filters
+    if (useAdvancedFilter && advancedFilterConfig) {
+      // Filter by event type (risk status mapping)
+      if (advancedFilterConfig.riskStatus && advancedFilterConfig.riskStatus.length > 0) {
+        const eventTypeMap: Record<string, string[]> = {
+          breach: ["BREACH_DETECTED", "BREACH_ACKNOWLEDGED", "BREACH_RESOLVED"],
+          warning: ["WARNING_DETECTED", "WARNING_CLEARED"],
+          safe: [],
+        };
+        
+        const allowedTypes = advancedFilterConfig.riskStatus.flatMap(
+          (status) => eventTypeMap[status] || []
+        );
+        
+        if (allowedTypes.length > 0) {
+          events = events.filter((e) => allowedTypes.includes(e.eventType));
+        }
+      }
+
+      // Filter by ownership percent range
+      if (advancedFilterConfig.ownershipPercentMin !== undefined || 
+          advancedFilterConfig.ownershipPercentMax !== undefined) {
+        events = events.filter((e) => {
+          if (advancedFilterConfig.ownershipPercentMin !== undefined && 
+              e.ownershipPercent < advancedFilterConfig.ownershipPercentMin) {
+            return false;
+          }
+          if (advancedFilterConfig.ownershipPercentMax !== undefined && 
+              e.ownershipPercent > advancedFilterConfig.ownershipPercentMax) {
+            return false;
+          }
+          return true;
+        });
+      }
+
+      // Filter by buying velocity range
+      if (advancedFilterConfig.buyingVelocityMin !== undefined || 
+          advancedFilterConfig.buyingVelocityMax !== undefined) {
+        events = events.filter((e) => {
+          if (advancedFilterConfig.buyingVelocityMin !== undefined && 
+              e.buyingVelocity < advancedFilterConfig.buyingVelocityMin) {
+            return false;
+          }
+          if (advancedFilterConfig.buyingVelocityMax !== undefined && 
+              e.buyingVelocity > advancedFilterConfig.buyingVelocityMax) {
+            return false;
+          }
+          return true;
+        });
+      }
     }
 
-    return historicalDataStore.queryBreachEvents(query);
-  }, [selectedTicker, selectedJurisdiction, selectedEventType, timeRange]);
+    return events;
+  }, [advancedFilterConfig, useAdvancedFilter]);
 
   const statistics = useMemo(() => {
     const stats = {
@@ -111,16 +166,6 @@ export default function HistoricalBreachViewer() {
     }
   };
 
-  // Get unique tickers and jurisdictions from breach events
-  const uniqueTickers = useMemo(() => {
-    const tickers = new Set(breachEvents.map((e) => e.ticker));
-    return Array.from(tickers).sort();
-  }, [breachEvents]);
-
-  const uniqueJurisdictions = useMemo(() => {
-    const jurisdictions = new Set(breachEvents.map((e) => e.jurisdiction));
-    return Array.from(jurisdictions).sort();
-  }, [breachEvents]);
 
   return (
     <Card className="w-full">
@@ -154,78 +199,13 @@ export default function HistoricalBreachViewer() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 border border-border rounded-lg bg-muted/30">
-          <div className="space-y-2">
-            <Label htmlFor="time-range" className="text-xs">Time Range</Label>
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger id="time-range" className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1h">Last Hour</SelectItem>
-                <SelectItem value="24h">Last 24 Hours</SelectItem>
-                <SelectItem value="7d">Last 7 Days</SelectItem>
-                <SelectItem value="30d">Last 30 Days</SelectItem>
-                <SelectItem value="all">All Time</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ticker-filter" className="text-xs">Ticker</Label>
-            <Select
-              value={selectedTicker || "all"}
-              onValueChange={(value) => setSelectedTicker(value === "all" ? null : value)}
-            >
-              <SelectTrigger id="ticker-filter" className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Tickers</SelectItem>
-                {uniqueTickers.map((ticker) => (
-                  <SelectItem key={ticker} value={ticker}>
-                    {ticker}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="jurisdiction-filter" className="text-xs">Jurisdiction</Label>
-            <Select
-              value={selectedJurisdiction}
-              onValueChange={(value) => setSelectedJurisdiction(value as Jurisdiction | "all")}
-            >
-              <SelectTrigger id="jurisdiction-filter" className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Jurisdictions</SelectItem>
-                {uniqueJurisdictions.map((jur) => (
-                  <SelectItem key={jur} value={jur}>
-                    {jur}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="event-type-filter" className="text-xs">Event Type</Label>
-            <Select value={selectedEventType} onValueChange={setSelectedEventType}>
-              <SelectTrigger id="event-type-filter" className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Events</SelectItem>
-                <SelectItem value="BREACH_DETECTED">Breach Detected</SelectItem>
-                <SelectItem value="WARNING_DETECTED">Warning Detected</SelectItem>
-                <SelectItem value="BREACH_ACKNOWLEDGED">Breach Acknowledged</SelectItem>
-                <SelectItem value="BREACH_RESOLVED">Breach Resolved</SelectItem>
-                <SelectItem value="WARNING_CLEARED">Warning Cleared</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        {/* Advanced Filters */}
+        <AdvancedFilter
+          config={advancedFilterConfig}
+          onConfigChange={setAdvancedFilterConfig}
+          availableFields={["ticker"]}
+          className="mb-4"
+        />
 
         {/* Breach Events List */}
         <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -249,7 +229,11 @@ export default function HistoricalBreachViewer() {
                     {getEventIcon(event.eventType)}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono font-semibold text-sm">{event.ticker}</span>
+                        <span className="font-mono font-semibold text-sm">
+                          {advancedFilterConfig.searchText
+                            ? highlightSearchText(event.ticker, advancedFilterConfig.searchText)
+                            : event.ticker}
+                        </span>
                         {getEventBadge(event.eventType)}
                         <Badge variant="outline" className="text-xs">
                           {event.jurisdiction}

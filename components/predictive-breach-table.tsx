@@ -20,6 +20,9 @@ import { AlertTriangle, CheckCircle2, XCircle, Filter, X } from "lucide-react";
 import { calculateBusinessDeadline } from "@/lib/compliance-rules-engine";
 import { useAuditLog } from "@/components/AuditLogContext";
 import { historicalDataStore } from "@/lib/historical-data-store";
+import AdvancedFilter, { type AdvancedFilterConfig } from "@/components/advanced-filter";
+import { applyAdvancedFilter } from "@/lib/filter-utils";
+import { highlightSearchText } from "@/lib/filter-utils";
 
 interface PredictiveBreachTableProps {
   onRowClick: (ticker: string) => void;
@@ -40,63 +43,30 @@ export default function PredictiveBreachTable({
   onRowClick,
 }: PredictiveBreachTableProps) {
   const { holdings } = usePortfolio();
-  const [filters, setFilters] = useState<FilterState>({
-    jurisdiction: null,
-    riskStatus: "all",
-    velocity: "all",
-    dataFreshness: "all",
-  });
-  const [showFilters, setShowFilters] = useState(true);
+  const [advancedFilterConfig, setAdvancedFilterConfig] = useState<AdvancedFilterConfig>({});
+  const [useAdvancedFilter, setUseAdvancedFilter] = useState(true);
+
+  // Helper function to get risk status for a holding
+  const getRiskStatus = (holding: Holding): "breach" | "warning" | "safe" => {
+    const ownershipPercent = (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+    const threshold = holding.regulatoryRule.threshold;
+    const warningMin = threshold * 0.9;
+    
+    if (ownershipPercent >= threshold) {
+      return "breach";
+    } else if (ownershipPercent >= warningMin && ownershipPercent < threshold) {
+      return "warning";
+    }
+    return "safe";
+  };
 
   const filteredHoldings = useMemo(() => {
-    return holdings.filter((holding) => {
-      // Jurisdiction filter
-      if (filters.jurisdiction && holding.jurisdiction !== filters.jurisdiction) {
-        return false;
-      }
-
-      // Risk status filter (need to calculate for each holding)
-      if (filters.riskStatus !== "all") {
-        const ownershipPercent = (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
-        const threshold = holding.regulatoryRule.threshold;
-        const warningMin = threshold * 0.9;
-        
-        let status: "breach" | "warning" | "safe" = "safe";
-        if (ownershipPercent >= threshold) {
-          status = "breach";
-        } else if (ownershipPercent >= warningMin && ownershipPercent < threshold) {
-          status = "warning";
-        }
-        
-        if (filters.riskStatus !== status) {
-          return false;
-        }
-      }
-
-      // Velocity filter
-      if (filters.velocity !== "all") {
-        const velocity = holding.buyingVelocity;
-        if (filters.velocity === "high" && velocity < 10000) return false;
-        if (filters.velocity === "medium" && (velocity < 2000 || velocity >= 10000)) return false;
-        if (filters.velocity === "low" && velocity >= 2000) return false;
-      }
-
-      // Data freshness filter
-      if (filters.dataFreshness !== "all") {
-        const parsed = new Date(holding.lastUpdated);
-        const ageMs = Date.now() - parsed.getTime();
-        const oneMinute = 60 * 1000;
-        const fifteenMinutes = 15 * 60 * 1000;
-        const oneHour = 60 * 60 * 1000;
-
-        if (filters.dataFreshness === "fresh" && ageMs >= fifteenMinutes) return false;
-        if (filters.dataFreshness === "stale" && (ageMs < fifteenMinutes || ageMs >= oneHour)) return false;
-        if (filters.dataFreshness === "error" && ageMs < oneHour) return false;
-      }
-
-      return true;
-    });
-  }, [holdings, filters]);
+    if (useAdvancedFilter) {
+      return applyAdvancedFilter(holdings, advancedFilterConfig, getRiskStatus);
+    }
+    // Fallback to original filtering logic if needed
+    return holdings;
+  }, [holdings, advancedFilterConfig, useAdvancedFilter]);
 
   const getStatusBadge = (status: string, timeToBreach: string) => {
     if (status === "breach") {
@@ -134,24 +104,6 @@ export default function PredictiveBreachTable({
     return status === "warning" && buyingVelocity > 5000;
   };
 
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.jurisdiction) count++;
-    if (filters.riskStatus !== "all") count++;
-    if (filters.velocity !== "all") count++;
-    if (filters.dataFreshness !== "all") count++;
-    return count;
-  }, [filters]);
-
-  const clearFilters = () => {
-    setFilters({
-      jurisdiction: null,
-      riskStatus: "all",
-      velocity: "all",
-      dataFreshness: "all",
-    });
-  };
-
   const jurisdictions = useMemo(() => {
     const unique = Array.from(new Set(holdings.map(h => h.jurisdiction)));
     return unique.sort();
@@ -163,131 +115,15 @@ export default function PredictiveBreachTable({
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-semibold">Predictive Breach Analysis</h2>
-            {activeFilterCount > 0 && (
-              <Badge variant="outline" className="gap-1">
-                {activeFilterCount} filter{activeFilterCount !== 1 ? "s" : ""} active
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent transition-colors"
-            >
-              <Filter className="w-4 h-4" />
-              Filters
-            </button>
-            {activeFilterCount > 0 && (
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              >
-                <X className="w-3 h-3" />
-                Clear
-              </button>
-            )}
           </div>
         </div>
 
-        {showFilters && (
-          <div className="mb-4 p-4 border border-border rounded-lg bg-muted/30">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Jurisdiction Filter */}
-              <div className="space-y-2">
-                <Label htmlFor="jurisdiction-filter" className="text-xs font-medium">
-                  Jurisdiction
-                </Label>
-                <Select
-                  value={filters.jurisdiction || "all"}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, jurisdiction: value === "all" ? null : value })
-                  }
-                >
-                  <SelectTrigger id="jurisdiction-filter" className="h-9">
-                    <SelectValue placeholder="All Jurisdictions" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Jurisdictions</SelectItem>
-                    {jurisdictions.map((jur) => (
-                      <SelectItem key={jur} value={jur}>
-                        {jur}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Risk Status Filter */}
-              <div className="space-y-2">
-                <Label htmlFor="risk-status-filter" className="text-xs font-medium">
-                  Risk Status
-                </Label>
-                <Select
-                  value={filters.riskStatus}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, riskStatus: value as RiskStatusFilter })
-                  }
-                >
-                  <SelectTrigger id="risk-status-filter" className="h-9">
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="breach">Active Breach</SelectItem>
-                    <SelectItem value="warning">Warning</SelectItem>
-                    <SelectItem value="safe">Safe</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Buying Velocity Filter */}
-              <div className="space-y-2">
-                <Label htmlFor="velocity-filter" className="text-xs font-medium">
-                  Buying Velocity
-                </Label>
-                <Select
-                  value={filters.velocity}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, velocity: value as VelocityFilter })
-                  }
-                >
-                  <SelectTrigger id="velocity-filter" className="h-9">
-                    <SelectValue placeholder="All Velocities" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Velocities</SelectItem>
-                    <SelectItem value="high">High (≥10k shares/hr)</SelectItem>
-                    <SelectItem value="medium">Medium (2k-10k shares/hr)</SelectItem>
-                    <SelectItem value="low">Low (&lt;2k shares/hr)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Data Freshness Filter */}
-              <div className="space-y-2">
-                <Label htmlFor="freshness-filter" className="text-xs font-medium">
-                  Data Freshness
-                </Label>
-                <Select
-                  value={filters.dataFreshness}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, dataFreshness: value as DataFreshnessFilter })
-                  }
-                >
-                  <SelectTrigger id="freshness-filter" className="h-9">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="fresh">Fresh (&lt;15m)</SelectItem>
-                    <SelectItem value="stale">Stale (15m-1h)</SelectItem>
-                    <SelectItem value="error">Feed Error (&gt;1h)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-        )}
+        <AdvancedFilter
+          config={advancedFilterConfig}
+          onConfigChange={setAdvancedFilterConfig}
+          availableFields={["ticker", "issuer", "isin"]}
+          className="mb-4"
+        />
 
         <div className="mb-2 text-sm text-muted-foreground">
           Showing {filteredHoldings.length} of {holdings.length} holdings
@@ -576,13 +412,21 @@ function PredictiveRow({
             />
           </div>
           <span className="font-mono text-xs text-muted-foreground">
-            {holding.ticker}
+            {advancedFilterConfig.searchText
+              ? highlightSearchText(holding.ticker, advancedFilterConfig.searchText)
+              : holding.ticker}
           </span>
-          <span>{holding.issuer}</span>
+          <span>
+            {advancedFilterConfig.searchText
+              ? highlightSearchText(holding.issuer, advancedFilterConfig.searchText)
+              : holding.issuer}
+          </span>
         </div>
       </td>
       <td className="p-2 text-xs font-mono text-muted-foreground">
-        {holding.isin}
+        {advancedFilterConfig.searchText
+          ? highlightSearchText(holding.isin, advancedFilterConfig.searchText)
+          : holding.isin}
       </td>
       <td className="p-2 text-sm">{holding.jurisdiction}</td>
       <td className="p-2 text-sm text-right font-mono">

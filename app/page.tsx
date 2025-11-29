@@ -28,6 +28,7 @@ import HistoricalDataStatus from "@/components/historical-data-status";
 import NotificationManager from "@/components/notification-manager";
 import ExportManager from "@/components/export-manager";
 import { NotificationMonitor } from "@/components/notification-monitor";
+import AdvancedAnalyticsDashboard from "@/components/advanced-analytics-dashboard";
 
 export default function Dashboard() {
   const { setSelectedTicker } = usePortfolio();
@@ -162,6 +163,11 @@ export default function Dashboard() {
         {/* Risk Heatmap */}
         <div>
           <RiskHeatmap onRegionClick={handleRegionClick} />
+        </div>
+
+        {/* Advanced Analytics Dashboard */}
+        <div>
+          <AdvancedAnalyticsDashboard />
         </div>
 
         {/* Tableau Analytics Section - Custom Risk Dashboard */}
