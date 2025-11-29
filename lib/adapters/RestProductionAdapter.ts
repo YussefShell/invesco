@@ -11,14 +11,51 @@ import type { IPortfolioDataProvider } from "@/lib/types/IDataProvider";
  */
 export class RestProductionAdapter implements IPortfolioDataProvider {
   private pollIntervals = new Map<string, ReturnType<typeof setInterval>>();
+  private retryAttempts = new Map<string, number>();
+  private readonly MAX_RETRIES = 3;
+  private readonly RETRY_DELAY = 1000; // 1 second base delay
+
+  /**
+   * Retry fetch with exponential backoff
+   */
+  private async fetchWithRetry(
+    url: string,
+    options: RequestInit = {},
+    retries = this.MAX_RETRIES
+  ): Promise<Response> {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        cache: "no-store",
+      });
+      
+      // Reset retry count on success
+      this.retryAttempts.delete(url);
+      
+      return response;
+    } catch (error) {
+      if (retries > 0) {
+        const attempt = this.MAX_RETRIES - retries + 1;
+        const delay = this.RETRY_DELAY * Math.pow(2, attempt - 1); // Exponential backoff
+        
+        console.warn(`[RestProductionAdapter] Request failed, retrying in ${delay}ms (${attempt}/${this.MAX_RETRIES})`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.fetchWithRetry(url, options, retries - 1);
+      }
+      
+      // All retries exhausted
+      this.retryAttempts.delete(url);
+      throw error;
+    }
+  }
 
   async connect(): Promise<boolean> {
     // Health check: verify the API route exists and is reachable.
     // We check the regulatory config endpoint since it's simpler and doesn't require a valid ticker.
     try {
-      const res = await fetch("/api/market-data/regulatory-config?jurisdiction=USA", {
+      const res = await this.fetchWithRetry("/api/market-data/regulatory-config?jurisdiction=USA", {
         method: "GET",
-        cache: "no-store",
       });
       
       // 400/404 means route exists but params are wrong (acceptable for health check)
@@ -66,18 +103,47 @@ export class RestProductionAdapter implements IPortfolioDataProvider {
   ): void {
     // Simple polling implementation to keep semantics consistent
     // even if your upstream is not streaming yet.
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 5;
+    
     const poll = async () => {
       try {
-        const res = await fetch(`/api/market-data?ticker=${encodeURIComponent(
-          ticker
-        )}`, {
+        const url = `/api/market-data?ticker=${encodeURIComponent(ticker)}`;
+        const res = await this.fetchWithRetry(url, {
           method: "GET",
-          cache: "no-store",
         });
-        if (!res.ok) return;
+        
+        if (!res.ok) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            console.error(`[RestProductionAdapter] Too many consecutive errors for ${ticker}, stopping polling`);
+            const interval = this.pollIntervals.get(ticker);
+            if (interval) {
+              clearInterval(interval);
+              this.pollIntervals.delete(ticker);
+            }
+            return;
+          }
+          return;
+        }
+        
+        // Reset error count on success
+        consecutiveErrors = 0;
         const body = (await res.json()) as AssetData;
         callback(body);
-      } catch {
+      } catch (error) {
+        consecutiveErrors++;
+        console.warn(`[RestProductionAdapter] Error polling ${ticker}:`, error);
+        
+        // Stop polling after too many errors
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          console.error(`[RestProductionAdapter] Too many consecutive errors for ${ticker}, stopping polling`);
+          const interval = this.pollIntervals.get(ticker);
+          if (interval) {
+            clearInterval(interval);
+            this.pollIntervals.delete(ticker);
+          }
+        }
         // Swallow errors here; connection state is surfaced via connect()
       }
     };
@@ -89,24 +155,37 @@ export class RestProductionAdapter implements IPortfolioDataProvider {
   }
 
   async getRegulatoryConfig(jurisdiction: string): Promise<any> {
-    const res = await fetch(
-      `/api/market-data/regulatory-config?jurisdiction=${encodeURIComponent(
-        jurisdiction
-      )}`,
-      {
+    try {
+      const url = `/api/market-data/regulatory-config?jurisdiction=${encodeURIComponent(jurisdiction)}`;
+      const res = await this.fetchWithRetry(url, {
         method: "GET",
-        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        let errorMessage = `Failed to load regulatory config for ${jurisdiction}: ${res.status}`;
+        try {
+          const errorBody = await res.json().catch(() => null);
+          if (errorBody?.error) {
+            errorMessage = errorBody.error;
+            if (errorBody.hint) {
+              errorMessage += ` ${errorBody.hint}`;
+            }
+          } else {
+            const text = await res.text().catch(() => "");
+            if (text) errorMessage += ` ${text}`;
+          }
+        } catch {
+          const text = await res.text().catch(() => "");
+          if (text) errorMessage += ` ${text}`;
+        }
+        throw new Error(errorMessage);
       }
-    );
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(
-        `Failed to load regulatory config for ${jurisdiction}: ${res.status} ${text}`
-      );
+      return res.json();
+    } catch (error: any) {
+      const message = error?.message ?? String(error);
+      throw new Error(`Failed to load regulatory config for ${jurisdiction}: ${message}`);
     }
-
-    return res.json();
   }
 
   /**

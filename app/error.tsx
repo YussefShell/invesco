@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 export default function Error({
   error,
   reset,
@@ -7,6 +9,10 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Log error for debugging
+    console.error("Error boundary caught:", error);
+  }, [error]);
   return (
     <div style={{ margin: 0, padding: "2rem", fontFamily: "system-ui, sans-serif", backgroundColor: "#0a0a0a", color: "#fff", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ maxWidth: "600px", padding: "2rem", border: "1px solid #333", borderRadius: "8px", backgroundColor: "#1a1a1a" }}>

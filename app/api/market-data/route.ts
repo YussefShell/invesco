@@ -90,10 +90,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json(payload);
   } catch (error: any) {
+    console.error("[market-data] Error:", error);
     return NextResponse.json(
       {
         error: "Failed to reach upstream market data gateway",
         details: error?.message ?? String(error),
+        hint: "For development, use the 'Mock' data source in the application UI to avoid this error.",
       },
       { status: 500 }
     );

@@ -1,7 +1,9 @@
 import type { Holding } from "@/types";
+import { calculateDeltaAdjustedExposure } from "@/lib/calculation-utils";
 
 /**
  * Calculate aggregated exposure for a ticker across funds.
+ * Uses delta-adjusted exposure to account for options positions.
  * 
  * @param holdings - All holdings in the portfolio
  * @param ticker - The ticker to calculate exposure for
@@ -24,8 +26,10 @@ export function calculateExposure(
     // Return individual fund exposures
     const fundExposures = new Map<string, number>();
     tickerHoldings.forEach((holding) => {
+      // Use delta-adjusted exposure (includes options)
+      const totalExposure = calculateDeltaAdjustedExposure(holding);
       const exposurePercent =
-        (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+        (totalExposure / holding.totalSharesOutstanding) * 100;
       const fundKey = holding.fundId || "UNKNOWN";
       fundExposures.set(fundKey, exposurePercent);
     });
@@ -33,8 +37,10 @@ export function calculateExposure(
   } else {
     // GROUP scope: sum all exposures for this ticker
     const totalExposure = tickerHoldings.reduce((sum, holding) => {
+      // Use delta-adjusted exposure (includes options)
+      const holdingExposure = calculateDeltaAdjustedExposure(holding);
       const exposurePercent =
-        (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+        (holdingExposure / holding.totalSharesOutstanding) * 100;
       return sum + exposurePercent;
     }, 0);
     return totalExposure;
@@ -64,4 +70,5 @@ export function getFundExposures(
   const result = calculateExposure(holdings, ticker, "FUND");
   return result instanceof Map ? result : new Map();
 }
+
 

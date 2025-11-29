@@ -22,8 +22,12 @@ export async function POST(request: NextRequest) {
     // Return job ID and download URL
     return NextResponse.json(job, { status: 201 });
   } catch (error) {
+    console.error("[exports] Error creating export job:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        hint: "Please check the server logs for more details."
+      },
       { status: 500 }
     );
   }
@@ -37,8 +41,12 @@ export async function GET(request: NextRequest) {
     const jobs = service.getExportJobs(limit);
     return NextResponse.json(jobs);
   } catch (error) {
+    console.error("[exports] Error fetching export jobs:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        hint: "Please check the server logs for more details."
+      },
       { status: 500 }
     );
   }

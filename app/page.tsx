@@ -1,16 +1,10 @@
 "use client";
 
 import { useEffect, useState, lazy, Suspense } from "react";
-import RiskHeatmap from "@/components/risk-heatmap";
-import PredictiveBreachTable from "@/components/predictive-breach-table";
-import CompliancePanel from "@/components/compliance-panel";
-import PreTradeSimulator from "@/components/pre-trade-simulator";
-import SystemStatus from "@/components/system-status";
-import { usePortfolio } from "@/components/PortfolioContext";
+import { usePortfolio } from "@/components/contexts/PortfolioContext";
 import { Shield, Calculator, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import RegulatoryAuditLog from "@/components/RegulatoryAuditLog";
-import { useAuditLog } from "@/components/AuditLogContext";
+import { useAuditLog } from "@/components/contexts/AuditLogContext";
 import {
   Dialog,
   DialogContent,
@@ -18,19 +12,45 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useRisk, type AggregationScope } from "@/components/RiskContext";
+import { useRisk, type AggregationScope } from "@/components/contexts/RiskContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { NotificationMonitor } from "@/components/notification-monitor";
-import AdvancedAnalyticsDashboard from "@/components/advanced-analytics-dashboard";
+import { LazyErrorBoundary } from "@/components/lazy-error-boundary";
 
-// OPTIMIZED: Lazy load heavy components to improve initial load time
-const TableauRiskDashboard = lazy(() => import("@/components/tableau-risk-dashboard"));
-const TimeTravelAuditView = lazy(() => import("@/components/TimeTravelAuditView"));
-const HistoricalBreachViewer = lazy(() => import("@/components/historical-breach-viewer"));
-const TrendAnalysisViewer = lazy(() => import("@/components/trend-analysis-viewer"));
-const HistoricalDataStatus = lazy(() => import("@/components/historical-data-status"));
-const NotificationManager = lazy(() => import("@/components/notification-manager"));
-const ExportManager = lazy(() => import("@/components/export-manager"));
+// Safe lazy loader wrapper that handles errors
+const safeLazy = (importFn: () => Promise<any>) => {
+  return lazy(() =>
+    importFn().catch((error) => {
+      console.error("Failed to load lazy component:", error);
+      // Return a fallback component instead of throwing
+      return {
+        default: () => (
+          <div className="p-4 border border-yellow-500/20 rounded-lg bg-yellow-500/10 text-yellow-500 text-sm">
+            Component failed to load. Please refresh the page.
+          </div>
+        ),
+      };
+    })
+  );
+};
+
+// OPTIMIZED: Lazy load ALL heavy components to improve initial load time
+// Only load critical UI components synchronously
+const RiskHeatmap = safeLazy(() => import("@/components/analytics/risk-heatmap"));
+const PredictiveBreachTable = safeLazy(() => import("@/components/compliance/predictive-breach-table"));
+const CompliancePanel = safeLazy(() => import("@/components/compliance/compliance-panel"));
+const PreTradeSimulator = safeLazy(() => import("@/components/compliance/pre-trade-simulator"));
+const SystemStatus = safeLazy(() => import("@/components/system-status"));
+const RegulatoryAuditLog = safeLazy(() => import("@/components/compliance/RegulatoryAuditLog"));
+const NotificationMonitor = safeLazy(() => import("@/components/notifications/notification-monitor"));
+const AdvancedAnalyticsDashboard = safeLazy(() => import("@/components/analytics/advanced-analytics-dashboard"));
+const IntegrationSettings = safeLazy(() => import("@/components/admin/IntegrationSettings"));
+const TableauRiskDashboard = safeLazy(() => import("@/components/tableau/tableau-risk-dashboard"));
+const TimeTravelAuditView = safeLazy(() => import("@/components/compliance/TimeTravelAuditView"));
+const HistoricalBreachViewer = safeLazy(() => import("@/components/compliance/historical-breach-viewer"));
+const TrendAnalysisViewer = safeLazy(() => import("@/components/analytics/trend-analysis-viewer"));
+const HistoricalDataStatus = safeLazy(() => import("@/components/analytics/historical-data-status"));
+const NotificationManager = safeLazy(() => import("@/components/notifications/notification-manager"));
+const ExportManager = safeLazy(() => import("@/components/export-manager"));
 
 export default function Dashboard() {
   const { setSelectedTicker } = usePortfolio();
@@ -98,6 +118,8 @@ export default function Dashboard() {
                       Active Data Source:{" "}
                       {dataSource === "mock"
                         ? "Internal Simulation (Mock)"
+                        : dataSource === "crd"
+                        ? "Charles River (FIX Protocol)"
                         : dataSource === "prod-rest"
                         ? "Live Production (REST Gateway)"
                         : "Live Production (WebSocket Stream)"}
@@ -129,31 +151,40 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-4">
               {/* Scope Toggle - Entity Aggregation Engine */}
-              <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-card">
-                <span className="text-xs text-muted-foreground font-medium">View:</span>
-                <button
-                  type="button"
-                  onClick={() => setAggregationScope("FUND")}
-                  className={`text-xs px-2 py-0.5 rounded transition-colors ${
-                    aggregationScope === "FUND"
-                      ? "bg-primary text-primary-foreground font-semibold"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Fund Level
-                </button>
-                <span className="text-xs text-muted-foreground">|</span>
-                <button
-                  type="button"
-                  onClick={() => setAggregationScope("GROUP")}
-                  className={`text-xs px-2 py-0.5 rounded transition-colors ${
-                    aggregationScope === "GROUP"
-                      ? "bg-primary text-primary-foreground font-semibold"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Group Level
-                </button>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-card">
+                  <span className="text-xs text-muted-foreground font-medium">View:</span>
+                  <button
+                    type="button"
+                    onClick={() => setAggregationScope("FUND")}
+                    title="Fund Level: Shows individual fund exposures. Each fund's position in a ticker is displayed separately. If multiple funds hold the same ticker, you'll see multiple rows (one per fund)."
+                    className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                      aggregationScope === "FUND"
+                        ? "bg-primary text-primary-foreground font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Fund Level
+                  </button>
+                  <span className="text-xs text-muted-foreground">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setAggregationScope("GROUP")}
+                    title="Group Level: Shows aggregated exposure across all funds. All funds' positions in the same ticker are summed together. If multiple funds hold the same ticker, you'll see one row with the combined total exposure."
+                    className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                      aggregationScope === "GROUP"
+                        ? "bg-primary text-primary-foreground font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Group Level
+                  </button>
+                </div>
+                <div className="text-[10px] text-muted-foreground px-3">
+                  {aggregationScope === "FUND" 
+                    ? "Fund Level: Individual fund exposures shown separately" 
+                    : "Group Level: Aggregated exposure across all funds"}
+                </div>
               </div>
               <Button
                 variant="outline"
@@ -187,18 +218,26 @@ export default function Dashboard() {
       </header>
 
       {/* Notification Monitor - runs in background */}
-      <NotificationMonitor />
+      <LazyErrorBoundary fallback={null}>
+        <Suspense fallback={null}>
+          <NotificationMonitor />
+        </Suspense>
+      </LazyErrorBoundary>
 
       {/* Main Content */}
       <main className="flex-1 container mx-auto px-6 py-6 space-y-6">
         {/* Risk Heatmap */}
         <div>
-          <RiskHeatmap onRegionClick={handleRegionClick} />
+          <Suspense fallback={<div className="h-64 flex items-center justify-center text-muted-foreground">Loading heatmap...</div>}>
+            <RiskHeatmap onRegionClick={handleRegionClick} />
+          </Suspense>
         </div>
 
         {/* Advanced Analytics Dashboard */}
         <div>
-          <AdvancedAnalyticsDashboard />
+          <Suspense fallback={<div className="h-64 flex items-center justify-center text-muted-foreground">Loading analytics...</div>}>
+            <AdvancedAnalyticsDashboard />
+          </Suspense>
         </div>
 
         {/* Tableau Analytics Section - Custom Risk Dashboard */}
@@ -232,25 +271,32 @@ export default function Dashboard() {
                 <div>
                   <h3 className="text-sm font-semibold mb-2">Calculation Method</h3>
                   <p className="text-sm text-muted-foreground mb-3">
-                    The projected breach time estimates when a position will exceed its regulatory threshold based on current buying velocity.
+                    The projected breach time estimates when a position will exceed its regulatory threshold based on current buying velocity. The calculation uses delta-adjusted exposure, which includes both direct share ownership and derivative positions (options).
                   </p>
                   <div className="bg-muted/50 rounded-md p-4 font-mono text-sm space-y-2">
                     <div className="flex items-start gap-2">
                       <span className="text-muted-foreground">1.</span>
                       <div>
-                        <span className="text-muted-foreground">Remaining to Threshold = </span>
-                        <span className="text-foreground">Threshold - Current Position (%)</span>
+                        <span className="text-muted-foreground">Total Exposure = </span>
+                        <span className="text-foreground">Shares Owned + (Sum of: Contracts × 100 × Delta)</span>
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
                       <span className="text-muted-foreground">2.</span>
                       <div>
-                        <span className="text-muted-foreground">Shares to Breach = </span>
-                        <span className="text-foreground">(Remaining to Threshold / 100) × Estimated Shares per 1%</span>
+                        <span className="text-muted-foreground">Threshold Shares = </span>
+                        <span className="text-foreground">(Threshold / 100) × Total Shares Outstanding</span>
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
                       <span className="text-muted-foreground">3.</span>
+                      <div>
+                        <span className="text-muted-foreground">Shares to Breach = </span>
+                        <span className="text-foreground">Threshold Shares - Total Exposure</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-muted-foreground">4.</span>
                       <div>
                         <span className="text-muted-foreground">Time to Breach (hours) = </span>
                         <span className="text-foreground">Shares to Breach / Buying Velocity (shares/hour)</span>
@@ -273,14 +319,14 @@ export default function Dashboard() {
                       <span className="text-orange-500 font-bold">●</span>
                       <div>
                         <span className="font-semibold">Warning:</span>
-                        <span className="text-muted-foreground ml-2">Position is within 0.5% of threshold OR breach projected within 24 hours</span>
+                        <span className="text-muted-foreground ml-2">Position is at or above 90% of threshold (within warning zone)</span>
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
                       <span className="text-green-500 font-bold">●</span>
                       <div>
                         <span className="font-semibold">Safe:</span>
-                        <span className="text-muted-foreground ml-2">Position is below threshold and no breach projected within 24 hours, OR buying velocity is zero or negative</span>
+                        <span className="text-muted-foreground ml-2">Position is below 90% of threshold (outside warning zone), OR buying velocity is zero or negative</span>
                       </div>
                     </div>
                   </div>
@@ -290,14 +336,14 @@ export default function Dashboard() {
                   <h3 className="text-sm font-semibold mb-2">Edge Cases</h3>
                   <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside">
                     <li>If the position is already at or above the threshold, the status is immediately set to &quot;Breach&quot; with no time calculation</li>
-                    <li>If buying velocity is zero or negative, the position is marked as &quot;Safe&quot; since no breach is projected</li>
-                    <li>If the calculated time exceeds 1000 hours, the position is considered &quot;Safe&quot; for practical purposes</li>
+                    <li>If buying velocity is zero or negative, the position is marked as &quot;Safe&quot; since no breach is projected (no calculation performed)</li>
+                    <li>If the position is below 90% of the threshold, it is marked as &quot;Safe&quot; regardless of buying velocity</li>
                   </ul>
                 </div>
 
                 <div className="pt-2 border-t border-border">
                   <p className="text-xs text-muted-foreground">
-                    <strong>Note:</strong> The calculation uses estimated shares per percentage point. In production, this would be dynamically calculated based on market capitalization and total shares outstanding for each security.
+                    <strong>Note:</strong> The calculation uses actual total shares outstanding for each security. Delta-adjusted exposure accounts for derivative positions (options) where each contract represents 100 shares adjusted by the option&apos;s delta value, providing institutional-grade accuracy for regulatory compliance.
                   </p>
                 </div>
               </div>
@@ -307,7 +353,9 @@ export default function Dashboard() {
 
         {/* Predictive Breach Table */}
         <div>
-          <PredictiveBreachTable onRowClick={handleRowClick} />
+          <Suspense fallback={<div className="h-64 flex items-center justify-center text-muted-foreground">Loading breach table...</div>}>
+            <PredictiveBreachTable onRowClick={handleRowClick} />
+          </Suspense>
         </div>
 
         {/* Audit Time-Travel Explorer */}
@@ -354,139 +402,36 @@ export default function Dashboard() {
       </main>
 
       {/* System Status Footer */}
-      <RegulatoryAuditLog />
-      <SystemStatus />
+      <Suspense fallback={null}>
+        <RegulatoryAuditLog />
+      </Suspense>
+      <Suspense fallback={null}>
+        <SystemStatus />
+      </Suspense>
 
-      {/* Compliance Panel */}
-      <CompliancePanel open={isPanelOpen} onOpenChange={setIsPanelOpen} />
+      {/* Compliance Panel - Only load when opened */}
+      {isPanelOpen && (
+        <Suspense fallback={<div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">Loading panel...</div>}>
+          <CompliancePanel open={isPanelOpen} onOpenChange={setIsPanelOpen} />
+        </Suspense>
+      )}
 
-      {/* Pre-Trade Simulator */}
-      <PreTradeSimulator
-        open={isSimulatorOpen}
-        onOpenChange={setIsSimulatorOpen}
-      />
+      {/* Pre-Trade Simulator - Only load when opened */}
+      {isSimulatorOpen && (
+        <Suspense fallback={<div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">Loading simulator...</div>}>
+          <PreTradeSimulator
+            open={isSimulatorOpen}
+            onOpenChange={setIsSimulatorOpen}
+          />
+        </Suspense>
+      )}
 
-      {/* System Configuration Dialog */}
-      <Dialog open={isConfigOpen} onOpenChange={setIsConfigOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>System Configuration</DialogTitle>
-            <DialogDescription>
-              Switch between internal simulation mode and external production
-              integration. The UI remains fully decoupled from the underlying
-              data source.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Active Data Source</p>
-              <p className="text-xs text-muted-foreground">
-                Choose which adapter powers the portfolio and risk engine.
-              </p>
-              <div className="mt-2 grid grid-cols-1 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setDataSource("mock")}
-                  className={`text-left border rounded-md px-3 py-2 text-sm transition-colors ${
-                    dataSource === "mock"
-                      ? "border-primary bg-primary/10"
-                      : "border-border hover:bg-muted/60"
-                  }`}
-                >
-                  <div className="font-semibold">
-                    Internal Simulation (Mock)
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Runs entirely in-browser with randomized data to safely demo
-                    the workflow.
-                  </div>
-                </button>
-
-                <div className="border rounded-md p-3 space-y-3">
-                  <div className="font-semibold text-sm">
-                    Live Production (Enterprise Gateway)
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Connects to server-side API routes that proxy to your REST/gRPC
-                    gateway or FIX/Kafka bridge. Configure endpoints via environment
-                    variables.
-                  </div>
-                  
-                  <div className="space-y-2 pt-2 border-t border-border">
-                    <p className="text-xs font-medium">Production Adapter Type:</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProductionAdapterType("rest");
-                          setDataSource("prod-rest");
-                        }}
-                        className={`text-left border rounded-md px-3 py-2 text-xs transition-colors ${
-                          dataSource === "prod-rest"
-                            ? "border-primary bg-primary/10"
-                            : "border-border hover:bg-muted/60"
-                        }`}
-                      >
-                        <div className="font-semibold">REST (Polling)</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          Uses Next.js API routes → REST/gRPC gateway
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProductionAdapterType("websocket");
-                          setDataSource("prod-ws");
-                        }}
-                        className={`text-left border rounded-md px-3 py-2 text-xs transition-colors ${
-                          dataSource === "prod-ws"
-                            ? "border-primary bg-primary/10"
-                            : "border-border hover:bg-muted/60"
-                        }`}
-                      >
-                        <div className="font-semibold">WebSocket (Streaming)</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          Real-time streaming via WebSocket gateway
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {connectionStatus === "error" && connectionError && (
-              <div className="rounded-md bg-red-500/10 border border-red-500/40 p-3">
-                <p className="text-sm font-medium text-red-500 mb-1">
-                  Connection Error
-                </p>
-                <p className="text-xs text-red-500/80 font-mono">
-                  {connectionError}
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {dataSource === "prod-rest"
-                    ? "Ensure MARKET_DATA_BASE_URL and REG_CONFIG_BASE_URL are set in your environment variables. For development, switch to 'Mock' data source to avoid this error."
-                    : "Ensure NEXT_PUBLIC_WS_BASE_URL is configured and the WebSocket gateway is accessible. For development, switch to 'Mock' data source to avoid this error."}
-                </p>
-              </div>
-            )}
-
-            {connectionStatus === "connected" && (
-              <div className="rounded-md bg-green-500/10 border border-green-500/40 p-3">
-                <p className="text-sm font-medium text-green-500">
-                  ✓ Successfully connected to production gateway
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  The adapter is now receiving live data from your configured
-                  endpoint.
-                </p>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Enterprise Integration Settings - Only load when opened */}
+      {isConfigOpen && (
+        <Suspense fallback={<div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">Loading settings...</div>}>
+          <IntegrationSettings open={isConfigOpen} onOpenChange={setIsConfigOpen} />
+        </Suspense>
+      )}
 
     </div>
   );

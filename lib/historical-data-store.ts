@@ -13,6 +13,7 @@ import type {
   RegulatoryStatus,
   Jurisdiction,
 } from "@/types";
+import { calculateDeltaAdjustedExposure } from "@/lib/calculation-utils";
 
 class HistoricalDataStore {
   private holdingSnapshots: HistoricalHoldingSnapshot[] = [];
@@ -66,8 +67,10 @@ class HistoricalDataStore {
   recordHoldingSnapshot(holdings: Holding[]): void {
     const timestamp = new Date().toISOString();
     const snapshots: HistoricalHoldingSnapshot[] = holdings.map((holding) => {
+      // Use delta-adjusted exposure for institutional-grade accuracy
+      const totalExposure = calculateDeltaAdjustedExposure(holding);
       const ownershipPercent =
-        (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+        (totalExposure / holding.totalSharesOutstanding) * 100;
       const threshold = holding.regulatoryRule.threshold;
       const warningMin = threshold * 0.9;
 

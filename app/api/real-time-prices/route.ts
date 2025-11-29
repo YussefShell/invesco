@@ -143,67 +143,79 @@ function getJurisdictionFromTicker(ticker: string): Jurisdiction {
 }
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const ticker = searchParams.get("ticker");
-  const jurisdiction = searchParams.get("jurisdiction") as Jurisdiction | null;
+  try {
+    const { searchParams } = new URL(request.url);
+    const ticker = searchParams.get("ticker");
+    const jurisdiction = searchParams.get("jurisdiction") as Jurisdiction | null;
 
-  if (!ticker) {
-    return NextResponse.json(
-      { error: "Missing required query parameter: ticker" },
-      { status: 400 }
-    );
-  }
+    if (!ticker) {
+      return NextResponse.json(
+        { error: "Missing required query parameter: ticker" },
+        { status: 400 }
+      );
+    }
 
-  // Check cache first
-  const cached = priceCache.get(ticker);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return NextResponse.json({
+    // Check cache first
+    const cached = priceCache.get(ticker);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return NextResponse.json({
+        ticker,
+        price: cached.price,
+        currentPosition: undefined,
+        jurisdiction: jurisdiction ?? getJurisdictionFromTicker(ticker),
+        lastUpdated: new Date().toISOString(),
+      } as AssetData);
+    }
+
+    // Try multiple data sources in order
+    let price: number | null = null;
+    
+    // 1. Try Yahoo Finance first (free, no API key)
+    price = await fetchYahooFinancePrice(ticker);
+    
+    // 2. Fallback to Alpha Vantage if available
+    if (!price) {
+      price = await fetchAlphaVantagePrice(ticker);
+    }
+    
+    // 3. Fallback to Finnhub if available
+    if (!price) {
+      price = await fetchFinnhubPrice(ticker);
+    }
+
+    if (!price) {
+      return NextResponse.json(
+        {
+          error: "Unable to fetch real-time price",
+          ticker,
+          hint: "Real-time price APIs may be rate-limited or unavailable. The mock adapter will use generated prices as fallback.",
+        },
+        { status: 503 }
+      );
+    }
+
+    // Cache the price
+    priceCache.set(ticker, { price, timestamp: Date.now() });
+
+    const assetData: AssetData = {
       ticker,
-      price: cached.price,
+      price: Number(price.toFixed(2)),
       currentPosition: undefined,
       jurisdiction: jurisdiction ?? getJurisdictionFromTicker(ticker),
       lastUpdated: new Date().toISOString(),
-    } as AssetData);
-  }
+    };
 
-  // Try multiple data sources in order
-  let price: number | null = null;
-  
-  // 1. Try Yahoo Finance first (free, no API key)
-  price = await fetchYahooFinancePrice(ticker);
-  
-  // 2. Fallback to Alpha Vantage if available
-  if (!price) {
-    price = await fetchAlphaVantagePrice(ticker);
-  }
-  
-  // 3. Fallback to Finnhub if available
-  if (!price) {
-    price = await fetchFinnhubPrice(ticker);
-  }
-
-  if (!price) {
+    return NextResponse.json(assetData);
+  } catch (error: any) {
+    console.error("[real-time-prices] Error:", error);
     return NextResponse.json(
       {
-        error: "Unable to fetch real-time price",
-        ticker,
+        error: "Failed to fetch real-time price",
+        details: error?.message ?? String(error),
         hint: "Real-time price APIs may be rate-limited or unavailable. The mock adapter will use generated prices as fallback.",
       },
-      { status: 503 }
+      { status: 500 }
     );
   }
-
-  // Cache the price
-  priceCache.set(ticker, { price, timestamp: Date.now() });
-
-  const assetData: AssetData = {
-    ticker,
-    price: Number(price.toFixed(2)),
-    currentPosition: undefined,
-    jurisdiction: jurisdiction ?? getJurisdictionFromTicker(ticker),
-    lastUpdated: new Date().toISOString(),
-  };
-
-  return NextResponse.json(assetData);
 }
 

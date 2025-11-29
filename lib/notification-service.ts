@@ -51,6 +51,19 @@ export class NotificationService {
   private initializeDefaultRules() {
     const defaultRules: AlertRule[] = [
       {
+        id: "breach-critical",
+        name: "Critical Regulatory Breach",
+        description: "Immediate alert when a position breaches regulatory threshold",
+        enabled: true,
+        conditions: [
+          { type: "breach", operator: "equals", value: "breach" },
+        ],
+        recipients: ["risk-manager-1", "compliance-officer-1", "trading-desk-1", "all-users"],
+        channels: ["email", "sms", "push"],
+        severity: "critical",
+        cooldownMinutes: 5, // Short cooldown for critical breaches
+      },
+      {
         id: "warning-high",
         name: "High Priority Warning",
         description: "Alert when position is within 0.5% of threshold",
@@ -91,8 +104,14 @@ export class NotificationService {
   checkAlerts(holding: Holding, breachStatus: AlertStatus, timeToBreachHours: number | null): Notification[] {
     const triggeredNotifications: Notification[] = [];
 
+    // Iterate through all enabled rules (including newly created ones)
     for (const rule of this.alertRules.values()) {
       if (!rule.enabled) continue;
+
+      // Log rule evaluation for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[NotificationService] Evaluating rule: ${rule.name} (${rule.id}) for ${holding.ticker}`);
+      }
 
       // Check cooldown
       const cooldownKey = `${rule.id}-${holding.id}`;
@@ -105,9 +124,27 @@ export class NotificationService {
       }
 
       // Evaluate conditions
-      if (this.evaluateConditions(rule.conditions, holding, breachStatus, timeToBreachHours)) {
+      const conditionsMet = this.evaluateConditions(rule.conditions, holding, breachStatus, timeToBreachHours);
+      
+      if (process.env.NODE_ENV === 'development' && conditionsMet) {
+        console.log(`[NotificationService] ✅ Rule "${rule.name}" conditions met for ${holding.ticker}`);
+      }
+      
+      if (conditionsMet) {
+        // Get recipients - if rule has "all-users" as a recipient, include all user-registered recipients
+        let recipientsToNotify = rule.recipients;
+        if (rule.recipients.includes("all-users")) {
+          // Include all user-registered recipients (exclude system defaults)
+          const userRecipients = Array.from(this.recipients.values())
+            .filter(r => !r.id.startsWith("risk-manager") && 
+                        !r.id.startsWith("compliance") && 
+                        !r.id.startsWith("trading-desk"))
+            .map(r => r.id);
+          recipientsToNotify = [...new Set([...rule.recipients.filter(r => r !== "all-users"), ...userRecipients])];
+        }
+
         // Create notifications for each recipient and channel
-        for (const recipientId of rule.recipients) {
+        for (const recipientId of recipientsToNotify) {
           const recipient = this.recipients.get(recipientId);
           if (!recipient) continue;
 
@@ -220,24 +257,186 @@ export class NotificationService {
     };
   }
 
-  // Send notification (mock implementation - in production would call actual services)
+  // Send notification - actually sends via email or SMS
   async sendNotification(notification: Notification): Promise<boolean> {
     const recipient = this.recipients.get(notification.recipientId);
-    if (!recipient) return false;
+    if (!recipient) {
+      console.error(`Recipient ${notification.recipientId} not found`);
+      return false;
+    }
 
     try {
-      // Simulate sending notification
-      // In production, this would:
-      // - For email: Call email service (SendGrid, AWS SES, etc.)
-      // - For SMS: Call SMS service (Twilio, AWS SNS, etc.)
-      // - For push: Send push notification via FCM/APNS
+      if (notification.channel === "email" && recipient.email) {
+        await this.sendEmail(recipient.email, notification);
+      } else if (notification.channel === "sms" && recipient.phone) {
+        await this.sendSMS(recipient.phone, notification);
+      } else if (notification.channel === "push" && recipient.pushToken) {
+        await this.sendPushNotification(recipient.pushToken, notification);
+      } else {
+        console.warn(`Cannot send ${notification.channel} notification: missing contact info`);
+        return false;
+      }
 
       notification.deliveredAt = new Date().toISOString();
       return true;
     } catch (error) {
-      notification.error = error instanceof Error ? error.message : "Unknown error";
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      notification.error = errorMessage;
+      console.error(`Failed to send notification: ${errorMessage}`, error);
       return false;
     }
+  }
+
+  private async sendEmail(email: string, notification: Notification): Promise<void> {
+    // Use Next.js API route to send email
+    // In production, integrate with SendGrid, AWS SES, Resend, etc.
+    try {
+      const baseUrl = this.getApiBaseUrl();
+      const url = baseUrl ? `${baseUrl}/api/notifications/send-email` : "/api/notifications/send-email";
+      
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: email,
+          subject: notification.title,
+          body: this.formatEmailBody(notification),
+          html: this.formatEmailHTML(notification),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Email service returned ${response.status}`);
+      }
+
+      console.log(`Email sent successfully to ${email}`);
+    } catch (error) {
+      // Fallback: log to console if API route fails (for development)
+      console.log(`[EMAIL] To: ${email}`);
+      console.log(`[EMAIL] Subject: ${notification.title}`);
+      console.log(`[EMAIL] Body: ${notification.message}`);
+      // Don't throw in development mode - allow notifications to continue
+      if (process.env.NODE_ENV === "production") {
+        throw error;
+      }
+    }
+  }
+
+  private async sendSMS(phone: string, notification: Notification): Promise<void> {
+    // Use Next.js API route to send SMS
+    // In production, integrate with Twilio, AWS SNS, etc.
+    try {
+      const baseUrl = this.getApiBaseUrl();
+      const url = baseUrl ? `${baseUrl}/api/notifications/send-sms` : "/api/notifications/send-sms";
+      
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: phone,
+          message: `${notification.title}: ${notification.message}`,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `SMS service returned ${response.status}`);
+      }
+
+      console.log(`SMS sent successfully to ${phone}`);
+    } catch (error) {
+      // Fallback: log to console if API route fails (for development)
+      console.log(`[SMS] To: ${phone}`);
+      console.log(`[SMS] Message: ${notification.title}: ${notification.message}`);
+      // Don't throw in development mode - allow notifications to continue
+      if (process.env.NODE_ENV === "production") {
+        throw error;
+      }
+    }
+  }
+
+  private async sendPushNotification(pushToken: string, notification: Notification): Promise<void> {
+    // Push notifications would be handled via FCM/APNS
+    // For now, just log
+    console.log(`[PUSH] Token: ${pushToken}`);
+    console.log(`[PUSH] Title: ${notification.title}`);
+    console.log(`[PUSH] Message: ${notification.message}`);
+  }
+
+  private formatEmailBody(notification: Notification): string {
+    return `
+${notification.title}
+
+${notification.message}
+
+${notification.ticker ? `Ticker: ${notification.ticker}` : ""}
+${notification.jurisdiction ? `Jurisdiction: ${notification.jurisdiction}` : ""}
+${notification.metadata?.ownershipPercent ? `Ownership: ${notification.metadata.ownershipPercent.toFixed(2)}%` : ""}
+${notification.metadata?.threshold ? `Threshold: ${notification.metadata.threshold}%` : ""}
+${notification.metadata?.timeToBreachHours ? `Time to Breach: ${notification.metadata.timeToBreachHours.toFixed(1)} hours` : ""}
+
+Sent at: ${new Date(notification.sentAt).toLocaleString()}
+    `.trim();
+  }
+
+  private formatEmailHTML(notification: Notification): string {
+    const severityColor = {
+      critical: "#dc2626",
+      high: "#ea580c",
+      medium: "#ca8a04",
+      low: "#2563eb",
+    }[notification.severity];
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .header { background-color: ${severityColor}; color: white; padding: 20px; border-radius: 5px 5px 0 0; }
+    .content { padding: 20px; background-color: #f9f9f9; }
+    .details { background-color: white; padding: 15px; border-radius: 5px; margin-top: 10px; }
+    .footer { padding: 10px; text-align: center; color: #666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>${notification.title}</h2>
+  </div>
+  <div class="content">
+    <p>${notification.message}</p>
+    <div class="details">
+      ${notification.ticker ? `<p><strong>Ticker:</strong> ${notification.ticker}</p>` : ""}
+      ${notification.jurisdiction ? `<p><strong>Jurisdiction:</strong> ${notification.jurisdiction}</p>` : ""}
+      ${notification.metadata?.ownershipPercent ? `<p><strong>Ownership:</strong> ${notification.metadata.ownershipPercent.toFixed(2)}%</p>` : ""}
+      ${notification.metadata?.threshold ? `<p><strong>Threshold:</strong> ${notification.metadata.threshold}%</p>` : ""}
+      ${notification.metadata?.timeToBreachHours ? `<p><strong>Time to Breach:</strong> ${notification.metadata.timeToBreachHours.toFixed(1)} hours</p>` : ""}
+    </div>
+  </div>
+  <div class="footer">
+    Sent at: ${new Date(notification.sentAt).toLocaleString()}
+  </div>
+</body>
+</html>
+    `.trim();
+  }
+
+  private getApiBaseUrl(): string {
+    // In client-side, use window.location.origin
+    if (typeof window !== "undefined" && window.location) {
+      try {
+        return window.location.origin;
+      } catch (error) {
+        // Fallback if window.location is not accessible
+        console.warn("Could not access window.location.origin, using relative URL");
+        return "";
+      }
+    }
+    // For server-side, try to get from environment or use default
+    // In server-side, we can use relative URLs which Next.js will resolve
+    return "";
   }
 
   // Get notification history

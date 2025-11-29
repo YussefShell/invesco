@@ -8,8 +8,12 @@ export async function GET() {
     const rules = service.getAlertRules();
     return NextResponse.json(rules);
   } catch (error) {
+    console.error("[notifications/alert-rules] Error fetching alert rules:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        hint: "Please check the server logs for more details."
+      },
       { status: 500 }
     );
   }
@@ -22,10 +26,15 @@ export async function POST(request: NextRequest) {
     const rule = service.createAlertRule(body as Omit<AlertRule, "id">);
     return NextResponse.json(rule, { status: 201 });
   } catch (error) {
+    console.error("[notifications/alert-rules] Error creating alert rule:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        hint: "Please check the server logs for more details."
+      },
       { status: 500 }
     );
   }
 }
+
 

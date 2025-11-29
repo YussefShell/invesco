@@ -1,6 +1,6 @@
 "use client";
 
-import { usePortfolio } from "@/components/PortfolioContext";
+import { usePortfolio } from "@/components/contexts/PortfolioContext";
 import { useRiskCalculator } from "@/lib/use-risk-calculator";
 import { formatDurationFromHours } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";

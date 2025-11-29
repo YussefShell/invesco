@@ -70,10 +70,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json(body);
   } catch (error: any) {
+    console.error("[regulatory-config] Error:", error);
     return NextResponse.json(
       {
         error: "Failed to reach upstream regulatory config gateway",
         details: error?.message ?? String(error),
+        hint: "For development, use the 'Mock' data source in the application UI to avoid this error.",
       },
       { status: 500 }
     );

@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Activity, Wifi, Database } from "lucide-react";
-import { useRisk } from "@/components/RiskContext";
+import { useRisk } from "@/components/contexts/RiskContext";
 
 export default function SystemStatus() {
   const { connectionStatus, latency, dataSource } = useRisk();

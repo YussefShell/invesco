@@ -6,12 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "fix-server": "node server/crd-fix-server.js"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-switch": "^1.2.6",
+    "@tanstack/react-virtual": "^3.13.12",
+    "@types/ws": "^8.18.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.6.0",
@@ -22,7 +26,10 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-simple-maps": "^3.0.0",
+    "resend": "^6.5.2",
     "tailwind-merge": "^2.2.2",
+    "twilio": "^5.10.6",
+    "ws": "^8.18.3",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

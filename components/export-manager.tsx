@@ -41,7 +41,7 @@ import {
   Clock,
   Loader2,
 } from "lucide-react";
-import { usePortfolio } from "@/components/PortfolioContext";
+import { usePortfolio } from "@/components/contexts/PortfolioContext";
 
 export default function ExportManager() {
   const { holdings } = usePortfolio();
@@ -64,7 +64,38 @@ export default function ExportManager() {
         throw new Error(`Failed to load export jobs: ${response.statusText}`);
       }
       const data = await response.json();
-      setExportJobs(Array.isArray(data) ? data : []);
+      const validJobs = Array.isArray(data) ? data : [];
+      
+      // Validate that all jobs still exist on the server
+      // This helps clean up jobs that were lost due to server restarts
+      const validatedJobs = await Promise.all(
+        validJobs.map(async (job: ExportJob) => {
+          // Only validate jobs that are still processing or pending
+          if (job.status === "processing" || job.status === "pending") {
+            try {
+              const statusResponse = await fetch(`/api/exports/jobs/${job.id}`);
+              if (statusResponse.status === 404) {
+                // Job no longer exists, mark as failed
+                return {
+                  ...job,
+                  status: "failed" as const,
+                  error: "Export job no longer available (server may have restarted)",
+                };
+              }
+              if (statusResponse.ok) {
+                const updatedJob = await statusResponse.json();
+                return updatedJob;
+              }
+            } catch (error) {
+              // If validation fails, keep the job but mark it for retry
+              console.warn(`Failed to validate job ${job.id}:`, error);
+            }
+          }
+          return job;
+        })
+      );
+      
+      setExportJobs(validatedJobs);
     } catch (error) {
       console.error("Failed to load export jobs:", error);
       setExportJobs([]);
@@ -123,6 +154,17 @@ export default function ExportManager() {
       try {
         const response = await fetch(`/api/exports/jobs/${jobId}`);
         if (!response.ok) {
+          // Handle 404 - job no longer exists (likely server restart)
+          if (response.status === 404) {
+            setExportJobs((prev) =>
+              prev.map((j) => 
+                j.id === jobId 
+                  ? { ...j, status: "failed" as const, error: "Export job no longer available (server may have restarted)" }
+                  : j
+              )
+            );
+            return;
+          }
           throw new Error(`Failed to fetch job status: ${response.statusText}`);
         }
         

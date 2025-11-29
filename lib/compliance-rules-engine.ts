@@ -158,6 +158,47 @@ export function isOnRestrictedList(ticker: string): boolean {
 }
 
 /**
+ * Check denominator confidence by comparing Bloomberg and Refinitiv data sources.
+ * Flags data quality warning if the difference is > 1%.
+ * 
+ * @param bloombergShares - Total shares outstanding from Bloomberg
+ * @param refinitivShares - Total shares outstanding from Refinitiv
+ * @param primaryShares - Primary total shares outstanding value (fallback)
+ * @returns Object indicating if there's a warning and the calculated difference percentage
+ */
+export function checkDenominatorConfidence(
+  bloombergShares: number | undefined,
+  refinitivShares: number | undefined,
+  primaryShares?: number
+): {
+  hasWarning: boolean;
+  differencePercent?: number;
+  assetStatus: 'DATA_quality_WARNING' | 'OK';
+} {
+  // If both sources are not available, we can't check confidence
+  if (!bloombergShares || !refinitivShares) {
+    return {
+      hasWarning: false,
+      assetStatus: 'OK',
+    };
+  }
+
+  // Calculate percentage difference
+  const avg = (bloombergShares + refinitivShares) / 2;
+  const difference = Math.abs(bloombergShares - refinitivShares);
+  const differencePercent = (difference / avg) * 100;
+
+  // Flag warning if difference > 1%
+  const hasWarning = differencePercent > 1.0;
+
+  return {
+    hasWarning,
+    differencePercent,
+    assetStatus: hasWarning ? 'DATA_quality_WARNING' : 'OK',
+  };
+}
+
+/**
  * Registry of generic pre/post trade compliance rules used by the simulator.
  */
 export const BASE_COMPLIANCE_RULES: ComplianceRuleDefinition[] = [
@@ -264,9 +305,22 @@ export function runPreTradeChecks(
 export function evaluateRisk(
   jurisdiction: string,
   holdingPercent: number,
-  positionType: "long" | "short"
+  positionType: "long" | "short",
+  hasDataQualityWarning: boolean = false
 ): ComplianceEvaluationResult {
   const normalizedJurisdiction = jurisdiction.toLowerCase() as Jurisdiction | string;
+
+  // If data quality warning is active, we cannot safely calculate risk
+  // Return a warning status but note that auto-filing should be disabled
+  if (hasDataQualityWarning) {
+    return {
+      status: "WARNING",
+      color: COLORS.WARNING,
+      requiredForm: "N/A - Data Quality Check Required",
+      deadline: "N/A",
+      deadlineDays: null,
+    };
+  }
 
   // USA (SEC Mode)
   if (normalizedJurisdiction === "usa" || normalizedJurisdiction === "us") {

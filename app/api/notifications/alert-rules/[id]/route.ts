@@ -15,8 +15,13 @@ export async function GET(
     }
     return NextResponse.json(rule);
   } catch (error) {
+    const { id } = await params;
+    console.error(`[notifications/alert-rules/${id}] Error:`, error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        hint: "Please check the server logs for more details."
+      },
       { status: 500 }
     );
   }
@@ -36,8 +41,13 @@ export async function PATCH(
     }
     return NextResponse.json(rule);
   } catch (error) {
+    const { id } = await params;
+    console.error(`[notifications/alert-rules/${id}] Error:`, error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        hint: "Please check the server logs for more details."
+      },
       { status: 500 }
     );
   }
@@ -56,8 +66,13 @@ export async function DELETE(
     }
     return NextResponse.json({ success: true });
   } catch (error) {
+    const { id } = await params;
+    console.error(`[notifications/alert-rules/${id}] Error:`, error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        hint: "Please check the server logs for more details."
+      },
       { status: 500 }
     );
   }

@@ -14,8 +14,13 @@ export async function GET(
     }
     return NextResponse.json(job);
   } catch (error) {
+    const { id } = await params;
+    console.error(`[exports/jobs/${id}] Error:`, error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        hint: "Please check the server logs for more details."
+      },
       { status: 500 }
     );
   }

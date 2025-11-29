@@ -26,10 +26,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(history);
   } catch (error) {
+    console.error("[notifications] Error fetching notification history:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        hint: "Please check the server logs for more details."
+      },
       { status: 500 }
     );
   }
 }
+
 

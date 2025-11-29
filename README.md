@@ -188,22 +188,30 @@ If you see connection errors:
 ## Project Structure
 
 ```
-├── app/                    # Next.js app directory
-│   ├── api/               # API routes (market data, regulatory config)
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes (market data, regulatory config, notifications)
 │   ├── page.tsx           # Main dashboard
 │   └── layout.tsx         # Root layout
-├── components/            # React components
-│   ├── compliance-panel.tsx
-│   ├── pre-trade-simulator.tsx
-│   ├── risk-heatmap.tsx
-│   └── ...
-├── lib/                   # Core business logic
+├── components/            # React components (organized by feature)
+│   ├── admin/            # Administration components
+│   ├── analytics/        # Analytics and visualization
+│   ├── compliance/       # Regulatory compliance components
+│   ├── contexts/         # React context providers
+│   ├── notifications/    # Notification components
+│   ├── tableau/          # Tableau integration
+│   └── ui/               # Reusable UI primitives
+├── docs/                 # Documentation files
+├── lib/                  # Core business logic
 │   ├── adapters/         # Data source adapters
-│   ├── compliance-rules-engine.ts
-│   ├── mock-data.ts
+│   ├── services/         # Business services
+│   ├── utilities/        # Utility scripts
 │   └── ...
-└── types/                 # TypeScript type definitions
+├── scripts/              # Build and deployment scripts
+├── server/               # Server-side code (FIX protocol server)
+└── types/                # TypeScript type definitions
 ```
+
+For detailed structure information, see [docs/REPOSITORY_STRUCTURE.md](docs/REPOSITORY_STRUCTURE.md).
 
 ## License
 

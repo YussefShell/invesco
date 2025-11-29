@@ -51,6 +51,39 @@ export interface Holding {
    * When aggregating at Group level, holdings with the same parentId are summed.
    */
   parentId?: string;
+  /**
+   * Derivative positions (options) that contribute to beneficial ownership.
+   * Used for delta-adjusted exposure calculation.
+   */
+  derivativePositions?: {
+    type: 'CALL' | 'PUT';
+    contracts: number;
+    delta: number;
+  }[];
+  /**
+   * Total shares outstanding from Bloomberg data source.
+   * Used for denominator confidence check.
+   */
+  totalShares_Bloomberg?: number;
+  /**
+   * Total shares outstanding from Refinitiv data source.
+   * Used for denominator confidence check.
+   */
+  totalShares_Refinitiv?: number;
+  /**
+   * Asset data quality status. Set to 'DATA_quality_WARNING' when data sources disagree.
+   * Affects whether auto-filing is enabled.
+   */
+  assetStatus?: 'DATA_quality_WARNING' | 'OK';
+  /**
+   * Timestamp of the last reconciliation between real-time velocity data and official database.
+   * Stored as an ISO-8601 string.
+   */
+  lastReconTimestamp?: string;
+  /**
+   * Reconciliation status indicating if real-time data matches the official database.
+   */
+  reconStatus?: 'MATCH' | 'DRIFT';
 }
 
 export interface BreachCalculation {

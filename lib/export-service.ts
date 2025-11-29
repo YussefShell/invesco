@@ -8,6 +8,7 @@ import type {
 import type { Holding } from "@/types";
 import * as XLSX from "xlsx";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { calculateDeltaAdjustedExposure } from "@/lib/calculation-utils";
 
 export class ExportService {
   private exportJobs: Map<string, ExportJob> = new Map();
@@ -190,7 +191,9 @@ export class ExportService {
       case "jurisdiction":
         return holding.jurisdiction;
       case "ownershipPercent":
-        return (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+        // Use delta-adjusted exposure for institutional-grade accuracy
+        const totalExposure = calculateDeltaAdjustedExposure(holding);
+        return (totalExposure / holding.totalSharesOutstanding) * 100;
       case "sharesOwned":
         return holding.sharesOwned;
       case "buyingVelocity":
