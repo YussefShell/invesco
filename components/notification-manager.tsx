@@ -40,6 +40,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 
 export default function NotificationManager() {
@@ -361,6 +362,30 @@ function AlertRuleDialog({
   const [channels, setChannels] = useState<NotificationChannel[]>(
     rule?.channels || ["email"]
   );
+  const [cooldownMinutes, setCooldownMinutes] = useState<number>(
+    rule?.cooldownMinutes || 15
+  );
+  const [loading, setLoading] = useState(false);
+
+  // Sync state when rule prop changes (e.g., switching from create to edit)
+  useEffect(() => {
+    if (rule) {
+      setName(rule.name || "");
+      setDescription(rule.description || "");
+      setEnabled(rule.enabled ?? true);
+      setSeverity(rule.severity || "medium");
+      setChannels(rule.channels || ["email"]);
+      setCooldownMinutes(rule.cooldownMinutes || 15);
+    } else {
+      // Reset to defaults for new rule
+      setName("");
+      setDescription("");
+      setEnabled(true);
+      setSeverity("medium");
+      setChannels(["email"]);
+      setCooldownMinutes(15);
+    }
+  }, [rule, open]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -368,10 +393,18 @@ function AlertRuleDialog({
       return;
     }
 
+    if (channels.length === 0) {
+      alert("At least one notification channel is required");
+      return;
+    }
+
+    if (loading) return; // Prevent double-clicks
+
+    setLoading(true);
     try {
       const ruleData = {
-        name,
-        description,
+        name: name.trim(),
+        description: description.trim(),
         enabled,
         severity,
         channels,
@@ -379,7 +412,7 @@ function AlertRuleDialog({
           { type: "breach" as const, operator: "equals" as const, value: "breach" },
         ],
         recipients: rule?.recipients || [],
-        cooldownMinutes: rule?.cooldownMinutes || 15,
+        cooldownMinutes: cooldownMinutes || 15,
       };
 
       const url = rule 
@@ -398,11 +431,16 @@ function AlertRuleDialog({
         throw new Error(errorData.error || `Failed to save rule: ${response.statusText}`);
       }
 
+      const savedRule = await response.json();
+      console.log("Rule saved successfully:", savedRule);
+
       await onSave();
       onOpenChange(false);
     } catch (error) {
       console.error("Failed to save rule:", error);
       alert(error instanceof Error ? error.message : "Failed to save alert rule");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -481,6 +519,19 @@ function AlertRuleDialog({
               )}
             </div>
           </div>
+          <div>
+            <Label>Cooldown (minutes)</Label>
+            <Input
+              type="number"
+              min="1"
+              value={cooldownMinutes}
+              onChange={(e) => setCooldownMinutes(parseInt(e.target.value) || 15)}
+              placeholder="15"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Prevent duplicate alerts within this time period
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -491,10 +542,23 @@ function AlertRuleDialog({
             <Label htmlFor="enabled">Enable this rule</Label>
           </div>
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSave}>Save Rule</Button>
+            <Button onClick={handleSave} disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Rule"
+              )}
+            </Button>
           </div>
         </div>
       </DialogContent>

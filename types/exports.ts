@@ -49,6 +49,7 @@ export interface ExportJob {
   createdAt: string;
   completedAt?: string;
   fileUrl?: string;
+  fileName?: string;
   fileSize?: number;
   error?: string;
   recordCount?: number;

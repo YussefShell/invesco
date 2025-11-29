@@ -6,6 +6,8 @@ import type {
   ReportSchedule,
 } from "@/types/exports";
 import type { Holding } from "@/types";
+import * as XLSX from "xlsx";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 export class ExportService {
   private exportJobs: Map<string, ExportJob> = new Map();
@@ -88,49 +90,60 @@ export class ExportService {
       let filteredHoldings = this.filterHoldings(holdings, options);
 
       // Generate export file based on format
-      let fileContent: string;
+      let fileContent: string | Uint8Array;
       let mimeType: string;
       let fileName: string;
 
+      const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      
       switch (options.format) {
         case "csv":
           fileContent = this.generateCSV(filteredHoldings, options);
-          mimeType = "text/csv";
-          fileName = `holdings-export-${Date.now()}.csv`;
+          mimeType = "text/csv;charset=utf-8";
+          fileName = `Invesco-Portfolio-Holdings-${timestamp}.csv`;
           break;
         case "excel":
-          // For Excel, we'll generate CSV format (can be opened in Excel)
-          // In production, use a library like exceljs or xlsx for proper XLSX format
-          fileContent = this.generateCSV(filteredHoldings, options);
-          mimeType = "text/csv";
-          fileName = `holdings-export-${Date.now()}.csv`;
+          fileContent = await this.generateExcel(filteredHoldings, options);
+          mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+          fileName = `Invesco-Portfolio-Holdings-${timestamp}.xlsx`;
           break;
         case "json":
-          fileContent = JSON.stringify(filteredHoldings, null, 2);
-          mimeType = "application/json";
-          fileName = `holdings-export-${Date.now()}.json`;
+          fileContent = this.generateJSON(filteredHoldings, options);
+          mimeType = "application/json;charset=utf-8";
+          fileName = `Invesco-Portfolio-Holdings-${timestamp}.json`;
           break;
         case "pdf":
-          // PDF generation would use the existing filing-pdf.ts logic
-          // For now, return a placeholder
-          fileContent = "PDF export not yet implemented";
+          fileContent = await this.generatePDF(filteredHoldings, options);
           mimeType = "application/pdf";
-          fileName = `holdings-export-${Date.now()}.pdf`;
+          fileName = `Invesco-Portfolio-Holdings-${timestamp}.pdf`;
           break;
         default:
           throw new Error(`Unsupported export format: ${options.format}`);
       }
 
       // Create base64 data URL for server-side (works in both Node.js and browser)
-      const base64 = typeof Buffer !== 'undefined' 
-        ? Buffer.from(fileContent).toString('base64')
-        : btoa(unescape(encodeURIComponent(fileContent)));
+      let base64: string;
+      if (fileContent instanceof Uint8Array) {
+        // Binary data (PDF, XLSX)
+        base64 = typeof Buffer !== 'undefined'
+          ? Buffer.from(fileContent).toString('base64')
+          : btoa(String.fromCharCode(...fileContent));
+      } else {
+        // Text data (CSV, JSON)
+        base64 = typeof Buffer !== 'undefined'
+          ? Buffer.from(fileContent, 'utf-8').toString('base64')
+          : btoa(unescape(encodeURIComponent(fileContent)));
+      }
+      
       const fileUrl = `data:${mimeType};base64,${base64}`;
-      const fileSize = new TextEncoder().encode(fileContent).length;
+      const fileSize = fileContent instanceof Uint8Array 
+        ? fileContent.length 
+        : new TextEncoder().encode(fileContent).length;
 
       job.status = "completed";
       job.completedAt = new Date().toISOString();
       job.fileUrl = fileUrl;
+      job.fileName = fileName;
       job.fileSize = fileSize;
       job.recordCount = filteredHoldings.length;
 
@@ -205,58 +218,300 @@ export class ExportService {
   }
 
   private generateCSV(holdings: Holding[], options: ExportOptions): string {
-    const columns = options.includeColumns || [
-      "ticker",
-      "issuer",
-      "isin",
-      "jurisdiction",
-      "ownershipPercent",
-      "sharesOwned",
-      "totalSharesOutstanding",
-      "buyingVelocity",
-      "threshold",
-      "lastUpdated",
+    // Professional CSV with proper headers
+    const headers = [
+      "Ticker",
+      "Issuer",
+      "ISIN",
+      "Jurisdiction",
+      "Ownership %",
+      "Shares Owned",
+      "Total Shares Outstanding",
+      "Buying Velocity (shares/hour)",
+      "Regulatory Threshold %",
+      "Regulatory Rule",
+      "Last Updated",
     ];
 
-    // CSV header
-    const header = columns.join(",");
+    // Add BOM for Excel UTF-8 support
+    const BOM = "\uFEFF";
+    const headerRow = BOM + headers.join(",");
 
-    // CSV rows
     const rows = holdings.map((holding) => {
       const ownershipPercent =
         (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
 
-      return columns
-        .map((col) => {
-          switch (col) {
-            case "ticker":
-              return holding.ticker;
-            case "issuer":
-              return `"${holding.issuer}"`;
-            case "isin":
-              return holding.isin;
-            case "jurisdiction":
-              return holding.jurisdiction;
-            case "ownershipPercent":
-              return ownershipPercent.toFixed(2);
-            case "sharesOwned":
-              return holding.sharesOwned.toLocaleString();
-            case "totalSharesOutstanding":
-              return holding.totalSharesOutstanding.toLocaleString();
-            case "buyingVelocity":
-              return holding.buyingVelocity.toLocaleString();
-            case "threshold":
-              return holding.regulatoryRule.threshold.toFixed(2);
-            case "lastUpdated":
-              return holding.lastUpdated;
-            default:
-              return "";
-          }
-        })
-        .join(",");
+      // Escape commas and quotes in CSV
+      const escapeCSV = (value: string | number): string => {
+        const str = String(value);
+        if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      return [
+        escapeCSV(holding.ticker),
+        escapeCSV(holding.issuer),
+        escapeCSV(holding.isin),
+        escapeCSV(holding.jurisdiction),
+        ownershipPercent.toFixed(2),
+        holding.sharesOwned.toLocaleString(),
+        holding.totalSharesOutstanding.toLocaleString(),
+        holding.buyingVelocity.toLocaleString(),
+        holding.regulatoryRule.threshold.toFixed(2),
+        escapeCSV(holding.regulatoryRule.name),
+        new Date(holding.lastUpdated).toLocaleString(),
+      ].join(",");
     });
 
-    return [header, ...rows].join("\n");
+    return [headerRow, ...rows].join("\n");
+  }
+
+  private async generateExcel(holdings: Holding[], options: ExportOptions): Promise<Uint8Array> {
+    // Prepare data for Excel
+    const worksheetData = holdings.map((holding) => {
+      const ownershipPercent =
+        (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+
+      return {
+        "Ticker": holding.ticker,
+        "Issuer": holding.issuer,
+        "ISIN": holding.isin,
+        "Jurisdiction": holding.jurisdiction,
+        "Ownership %": parseFloat(ownershipPercent.toFixed(2)),
+        "Shares Owned": holding.sharesOwned,
+        "Total Shares Outstanding": holding.totalSharesOutstanding,
+        "Buying Velocity (shares/hour)": holding.buyingVelocity,
+        "Regulatory Threshold %": holding.regulatoryRule.threshold,
+        "Regulatory Rule": holding.regulatoryRule.name,
+        "Regulatory Code": holding.regulatoryRule.code,
+        "Last Updated": new Date(holding.lastUpdated),
+      };
+    });
+
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+
+    // Set column widths
+    const columnWidths = [
+      { wch: 12 }, // Ticker
+      { wch: 30 }, // Issuer
+      { wch: 15 }, // ISIN
+      { wch: 15 }, // Jurisdiction
+      { wch: 15 }, // Ownership %
+      { wch: 18 }, // Shares Owned
+      { wch: 25 }, // Total Shares Outstanding
+      { wch: 25 }, // Buying Velocity
+      { wch: 22 }, // Regulatory Threshold %
+      { wch: 25 }, // Regulatory Rule
+      { wch: 18 }, // Regulatory Code
+      { wch: 20 }, // Last Updated
+    ];
+    worksheet["!cols"] = columnWidths;
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Portfolio Holdings");
+
+    // Generate Excel file
+    const excelBuffer = XLSX.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+      compression: true,
+    });
+
+    return new Uint8Array(excelBuffer);
+  }
+
+  private generateJSON(holdings: Holding[], options: ExportOptions): string {
+    // Professional JSON export with metadata
+    const exportData = {
+      metadata: {
+        exportDate: new Date().toISOString(),
+        exportFormat: "JSON",
+        recordCount: holdings.length,
+        generatedBy: "Invesco Regulatory Risk Management System",
+        version: "1.0",
+      },
+      holdings: holdings.map((holding) => {
+        const ownershipPercent =
+          (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+
+        return {
+          id: holding.id,
+          ticker: holding.ticker,
+          issuer: holding.issuer,
+          isin: holding.isin,
+          jurisdiction: holding.jurisdiction,
+          ownership: {
+            percentage: parseFloat(ownershipPercent.toFixed(4)),
+            sharesOwned: holding.sharesOwned,
+            totalSharesOutstanding: holding.totalSharesOutstanding,
+          },
+          buyingVelocity: holding.buyingVelocity,
+          regulatory: {
+            ruleCode: holding.regulatoryRule.code,
+            ruleName: holding.regulatoryRule.name,
+            threshold: holding.regulatoryRule.threshold,
+            jurisdiction: holding.regulatoryRule.jurisdiction,
+          },
+          lastUpdated: holding.lastUpdated,
+          price: holding.price,
+          fundId: holding.fundId,
+          parentId: holding.parentId,
+        };
+      }),
+    };
+
+    return JSON.stringify(exportData, null, 2);
+  }
+
+  private async generatePDF(holdings: Holding[], options: ExportOptions): Promise<Uint8Array> {
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const pageWidth = 595.28;
+    const pageHeight = 841.89;
+    const margin = 50;
+    const tableStartY = pageHeight - 100;
+    let currentY = tableStartY;
+    let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+
+    // Header
+    currentPage.drawText("Invesco Portfolio Holdings Report", {
+      x: margin,
+      y: pageHeight - 40,
+      size: 16,
+      font: boldFont,
+      color: rgb(0.07, 0.11, 0.2),
+    });
+
+    currentPage.drawText(
+      `Generated: ${new Date().toLocaleString()} | Total Holdings: ${holdings.length}`,
+      {
+        x: margin,
+        y: pageHeight - 60,
+        size: 10,
+        font: font,
+        color: rgb(0.4, 0.4, 0.4),
+      }
+    );
+
+    // Table headers
+    const headers = ["Ticker", "Issuer", "Jurisdiction", "Ownership %", "Threshold %", "Rule"];
+    const colWidths = [60, 150, 80, 70, 70, 100];
+    let colX = margin;
+
+    currentY = tableStartY - 20;
+    headers.forEach((header, index) => {
+      currentPage.drawText(header, {
+        x: colX,
+        y: currentY,
+        size: 9,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+      colX += colWidths[index];
+    });
+
+    // Draw header line (using rectangle as line)
+    currentPage.drawRectangle({
+      x: margin,
+      y: currentY - 6,
+      width: pageWidth - margin * 2,
+      height: 1,
+      color: rgb(0, 0, 0),
+    });
+
+    currentY -= 20;
+    const rowHeight = 15;
+    const minY = margin + 30;
+
+    // Table rows
+    holdings.forEach((holding, index) => {
+      // Check if we need a new page
+      if (currentY < minY) {
+        currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+        currentY = pageHeight - 60;
+
+        // Redraw headers on new page
+        colX = margin;
+        headers.forEach((header, idx) => {
+          currentPage.drawText(header, {
+            x: colX,
+            y: currentY,
+            size: 9,
+            font: boldFont,
+            color: rgb(0, 0, 0),
+          });
+          colX += colWidths[idx];
+        });
+
+        currentPage.drawRectangle({
+          x: margin,
+          y: currentY - 6,
+          width: pageWidth - margin * 2,
+          height: 1,
+          color: rgb(0, 0, 0),
+        });
+
+        currentY -= 20;
+      }
+
+      const ownershipPercent =
+        (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+
+      const rowData = [
+        holding.ticker,
+        holding.issuer.length > 25 ? holding.issuer.substring(0, 22) + "..." : holding.issuer,
+        holding.jurisdiction,
+        ownershipPercent.toFixed(2) + "%",
+        holding.regulatoryRule.threshold.toFixed(2) + "%",
+        holding.regulatoryRule.code,
+      ];
+
+      colX = margin;
+      rowData.forEach((cell, cellIndex) => {
+        currentPage.drawText(cell, {
+          x: colX + 2,
+          y: currentY - 10,
+          size: 8,
+          font: font,
+          color: rgb(0, 0, 0),
+          maxWidth: colWidths[cellIndex] - 4,
+        });
+        colX += colWidths[cellIndex];
+      });
+
+      // Draw row line (using rectangle as line)
+      currentPage.drawRectangle({
+        x: margin,
+        y: currentY - rowHeight + 1,
+        width: pageWidth - margin * 2,
+        height: 0.5,
+        color: rgb(0.8, 0.8, 0.8),
+      });
+
+      currentY -= rowHeight;
+    });
+
+    // Footer on last page
+    const pages = pdfDoc.getPages();
+    const lastPage = pages[pages.length - 1];
+    lastPage.drawText(
+      `Page ${pages.length} of ${pages.length} | Confidential - Invesco Internal Use Only`,
+      {
+        x: margin,
+        y: 30,
+        size: 8,
+        font: font,
+        color: rgb(0.5, 0.5, 0.5),
+      }
+    );
+
+    const pdfBytes = await pdfDoc.save();
+    return pdfBytes;
   }
 
   // Scheduled reports management

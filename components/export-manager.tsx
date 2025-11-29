@@ -136,7 +136,7 @@ export default function ExportManager() {
           // Download the file
           const link = document.createElement("a");
           link.href = job.fileUrl;
-          link.download = `export-${jobId}.${job.format}`;
+          link.download = job.fileName || `Invesco-Portfolio-Holdings-${new Date().toISOString().split('T')[0].replace(/-/g, '')}.${job.format === "excel" ? "xlsx" : job.format}`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -393,7 +393,7 @@ export default function ExportManager() {
                             onClick={() => {
                               const link = document.createElement("a");
                               link.href = job.fileUrl!;
-                              link.download = `export-${job.id}.${job.format}`;
+                              link.download = job.fileName || `Invesco-Portfolio-Holdings-${new Date().toISOString().split('T')[0].replace(/-/g, '')}.${job.format === "excel" ? "xlsx" : job.format}`;
                               document.body.appendChild(link);
                               link.click();
                               document.body.removeChild(link);
