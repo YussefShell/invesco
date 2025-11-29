@@ -88,50 +88,50 @@ export class ExportService {
       let filteredHoldings = this.filterHoldings(holdings, options);
 
       // Generate export file based on format
-      let fileData: Blob;
+      let fileContent: string;
+      let mimeType: string;
       let fileName: string;
 
       switch (options.format) {
         case "csv":
-          const csvData = this.generateCSV(filteredHoldings, options);
-          fileData = new Blob([csvData], { type: "text/csv" });
+          fileContent = this.generateCSV(filteredHoldings, options);
+          mimeType = "text/csv";
           fileName = `holdings-export-${Date.now()}.csv`;
           break;
         case "excel":
           // For Excel, we'll generate CSV format (can be opened in Excel)
           // In production, use a library like exceljs or xlsx for proper XLSX format
-          const excelData = this.generateCSV(filteredHoldings, options);
-          // Use CSV MIME type - Excel can open CSV files
-          fileData = new Blob([excelData], {
-            type: "text/csv",
-          });
+          fileContent = this.generateCSV(filteredHoldings, options);
+          mimeType = "text/csv";
           fileName = `holdings-export-${Date.now()}.csv`;
           break;
         case "json":
-          const jsonData = JSON.stringify(filteredHoldings, null, 2);
-          fileData = new Blob([jsonData], { type: "application/json" });
+          fileContent = JSON.stringify(filteredHoldings, null, 2);
+          mimeType = "application/json";
           fileName = `holdings-export-${Date.now()}.json`;
           break;
         case "pdf":
           // PDF generation would use the existing filing-pdf.ts logic
           // For now, return a placeholder
-          fileData = new Blob(["PDF export not yet implemented"], {
-            type: "application/pdf",
-          });
+          fileContent = "PDF export not yet implemented";
+          mimeType = "application/pdf";
           fileName = `holdings-export-${Date.now()}.pdf`;
           break;
         default:
           throw new Error(`Unsupported export format: ${options.format}`);
       }
 
-      // In a real implementation, upload to storage and get URL
-      // For now, create a data URL
-      const fileUrl = URL.createObjectURL(fileData);
+      // Create base64 data URL for server-side (works in both Node.js and browser)
+      const base64 = typeof Buffer !== 'undefined' 
+        ? Buffer.from(fileContent).toString('base64')
+        : btoa(unescape(encodeURIComponent(fileContent)));
+      const fileUrl = `data:${mimeType};base64,${base64}`;
+      const fileSize = new TextEncoder().encode(fileContent).length;
 
       job.status = "completed";
       job.completedAt = new Date().toISOString();
       job.fileUrl = fileUrl;
-      job.fileSize = fileData.size;
+      job.fileSize = fileSize;
       job.recordCount = filteredHoldings.length;
 
       this.exportJobs.set(jobId, job);

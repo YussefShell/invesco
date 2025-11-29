@@ -60,20 +60,28 @@ export default function ExportManager() {
   const loadExportJobs = async () => {
     try {
       const response = await fetch("/api/exports?limit=20");
+      if (!response.ok) {
+        throw new Error(`Failed to load export jobs: ${response.statusText}`);
+      }
       const data = await response.json();
-      setExportJobs(data || []);
+      setExportJobs(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to load export jobs:", error);
+      setExportJobs([]);
     }
   };
 
   const loadScheduledReports = async () => {
     try {
       const response = await fetch("/api/exports/scheduled-reports");
+      if (!response.ok) {
+        throw new Error(`Failed to load scheduled reports: ${response.statusText}`);
+      }
       const data = await response.json();
-      setScheduledReports(data || []);
+      setScheduledReports(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to load scheduled reports:", error);
+      setScheduledReports([]);
     }
   };
 
@@ -114,6 +122,10 @@ export default function ExportManager() {
     const poll = async () => {
       try {
         const response = await fetch(`/api/exports/jobs/${jobId}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch job status: ${response.statusText}`);
+        }
+        
         const job = await response.json();
 
         setExportJobs((prev) =>
@@ -129,13 +141,22 @@ export default function ExportManager() {
           link.click();
           document.body.removeChild(link);
         } else if (job.status === "failed") {
-          alert(`Export failed: ${job.error}`);
+          alert(`Export failed: ${job.error || "Unknown error"}`);
         } else if (attempts < maxAttempts) {
           attempts++;
           setTimeout(poll, 1000);
+        } else {
+          console.warn("Polling timeout - job status unknown");
         }
       } catch (error) {
         console.error("Failed to poll job status:", error);
+        setExportJobs((prev) =>
+          prev.map((j) => 
+            j.id === jobId 
+              ? { ...j, status: "failed" as const, error: error instanceof Error ? error.message : "Polling failed" }
+              : j
+          )
+        );
       }
     };
 
@@ -147,12 +168,16 @@ export default function ExportManager() {
       return;
 
     try {
-      await fetch(`/api/exports/scheduled-reports/${reportId}`, {
+      const response = await fetch(`/api/exports/scheduled-reports/${reportId}`, {
         method: "DELETE",
       });
-      loadScheduledReports();
+      if (!response.ok) {
+        throw new Error(`Failed to delete report: ${response.statusText}`);
+      }
+      await loadScheduledReports();
     } catch (error) {
       console.error("Failed to delete report:", error);
+      alert("Failed to delete scheduled report. Please try again.");
     }
   };
 
@@ -161,14 +186,18 @@ export default function ExportManager() {
     enabled: boolean
   ) => {
     try {
-      await fetch(`/api/exports/scheduled-reports/${reportId}`, {
+      const response = await fetch(`/api/exports/scheduled-reports/${reportId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled }),
       });
-      loadScheduledReports();
+      if (!response.ok) {
+        throw new Error(`Failed to toggle report: ${response.statusText}`);
+      }
+      await loadScheduledReports();
     } catch (error) {
       console.error("Failed to toggle report:", error);
+      alert("Failed to update scheduled report. Please try again.");
     }
   };
 
@@ -260,7 +289,7 @@ export default function ExportManager() {
                             </Badge>
                             <Badge variant="outline">
                               {getFormatIcon(report.exportOptions.format)}
-                              {report.exportOptions.format.toUpperCase()}
+                              {report.exportOptions.format === "excel" ? "EXCEL" : report.exportOptions.format.toUpperCase()}
                             </Badge>
                           </div>
                           {report.description && (
@@ -531,6 +560,11 @@ function ScheduledReportDialog({
   );
 
   const handleSave = async () => {
+    if (!name.trim()) {
+      alert("Report name is required");
+      return;
+    }
+
     try {
       const reportData = {
         name,
@@ -550,25 +584,27 @@ function ScheduledReportDialog({
           .filter((r) => r.length > 0),
       };
 
-      if (report) {
-        await fetch(`/api/exports/scheduled-reports/${report.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(reportData),
-        });
-      } else {
-        await fetch("/api/exports/scheduled-reports", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(reportData),
-        });
+      const url = report
+        ? `/api/exports/scheduled-reports/${report.id}`
+        : "/api/exports/scheduled-reports";
+      const method = report ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reportData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to save report: ${response.statusText}`);
       }
 
-      onSave();
+      await onSave();
       onOpenChange(false);
     } catch (error) {
       console.error("Failed to save report:", error);
-      alert("Failed to save scheduled report");
+      alert(error instanceof Error ? error.message : "Failed to save scheduled report");
     }
   };
 

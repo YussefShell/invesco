@@ -51,19 +51,6 @@ export class NotificationService {
   private initializeDefaultRules() {
     const defaultRules: AlertRule[] = [
       {
-        id: "breach-critical",
-        name: "Critical Breach Alert",
-        description: "Immediate notification for any regulatory breach",
-        enabled: true,
-        conditions: [
-          { type: "breach", operator: "equals", value: "breach" },
-        ],
-        recipients: ["risk-manager-1", "compliance-officer-1"],
-        channels: ["email", "sms", "push"],
-        severity: "critical",
-        cooldownMinutes: 5,
-      },
-      {
         id: "warning-high",
         name: "High Priority Warning",
         description: "Alert when position is within 0.5% of threshold",

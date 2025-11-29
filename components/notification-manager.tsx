@@ -58,10 +58,14 @@ export default function NotificationManager() {
   const loadAlertRules = async () => {
     try {
       const response = await fetch("/api/notifications/alert-rules");
+      if (!response.ok) {
+        throw new Error(`Failed to load alert rules: ${response.statusText}`);
+      }
       const data = await response.json();
-      setAlertRules(data);
+      setAlertRules(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to load alert rules:", error);
+      setAlertRules([]);
     }
   };
 
@@ -77,14 +81,18 @@ export default function NotificationManager() {
 
   const toggleRule = async (ruleId: string, enabled: boolean) => {
     try {
-      await fetch(`/api/notifications/alert-rules/${ruleId}`, {
+      const response = await fetch(`/api/notifications/alert-rules/${ruleId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled }),
       });
-      loadAlertRules();
+      if (!response.ok) {
+        throw new Error(`Failed to toggle rule: ${response.statusText}`);
+      }
+      await loadAlertRules();
     } catch (error) {
       console.error("Failed to toggle rule:", error);
+      alert("Failed to update alert rule. Please try again.");
     }
   };
 
@@ -92,12 +100,16 @@ export default function NotificationManager() {
     if (!confirm("Are you sure you want to delete this alert rule?")) return;
 
     try {
-      await fetch(`/api/notifications/alert-rules/${ruleId}`, {
+      const response = await fetch(`/api/notifications/alert-rules/${ruleId}`, {
         method: "DELETE",
       });
-      loadAlertRules();
+      if (!response.ok) {
+        throw new Error(`Failed to delete rule: ${response.statusText}`);
+      }
+      await loadAlertRules();
     } catch (error) {
       console.error("Failed to delete rule:", error);
+      alert("Failed to delete alert rule. Please try again.");
     }
   };
 
@@ -206,11 +218,15 @@ export default function NotificationManager() {
                         </span>
                         <span className="flex items-center gap-1">
                           Channels:
-                          {rule.channels.map((ch) => (
-                            <span key={ch} className="flex items-center gap-1">
-                              {getChannelIcon(ch)}
-                            </span>
-                          ))}
+                          {rule.channels.length > 0 ? (
+                            rule.channels.map((ch) => (
+                              <span key={ch} className="flex items-center gap-1" title={ch}>
+                                {getChannelIcon(ch)}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-muted-foreground">None</span>
+                          )}
                         </span>
                         {rule.cooldownMinutes && (
                           <span>Cooldown: {rule.cooldownMinutes} min</span>
@@ -347,6 +363,11 @@ function AlertRuleDialog({
   );
 
   const handleSave = async () => {
+    if (!name.trim()) {
+      alert("Rule name is required");
+      return;
+    }
+
     try {
       const ruleData = {
         name,
@@ -361,25 +382,27 @@ function AlertRuleDialog({
         cooldownMinutes: rule?.cooldownMinutes || 15,
       };
 
-      if (rule) {
-        await fetch(`/api/notifications/alert-rules/${rule.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(ruleData),
-        });
-      } else {
-        await fetch("/api/notifications/alert-rules", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(ruleData),
-        });
+      const url = rule 
+        ? `/api/notifications/alert-rules/${rule.id}`
+        : "/api/notifications/alert-rules";
+      const method = rule ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ruleData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to save rule: ${response.statusText}`);
       }
 
-      onSave();
+      await onSave();
       onOpenChange(false);
     } catch (error) {
       console.error("Failed to save rule:", error);
-      alert("Failed to save alert rule");
+      alert(error instanceof Error ? error.message : "Failed to save alert rule");
     }
   };
 
