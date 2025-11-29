@@ -149,7 +149,7 @@ const createInitialHoldings = (): Holding[] => {
     return rule;
   };
 
-  const TARGET_COUNT = 1500; // total number of synthetic holdings to generate
+  const TARGET_COUNT = 200; // total number of synthetic holdings to generate (reduced for performance)
 
   for (let i = seedHoldings.length; i < TARGET_COUNT; i++) {
     const seed = seedHoldings[i % seedHoldings.length];

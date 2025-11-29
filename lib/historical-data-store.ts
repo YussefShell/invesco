@@ -20,11 +20,11 @@ class HistoricalDataStore {
   private auditLogEntries: AuditLogEntry[] = [];
   private trendDataPoints: TrendDataPoint[] = [];
 
-  // Configuration
-  private readonly MAX_SNAPSHOTS = 10000; // Maximum number of holding snapshots to keep
-  private readonly MAX_BREACH_EVENTS = 5000; // Maximum number of breach events to keep
-  private readonly MAX_AUDIT_ENTRIES = 10000; // Maximum number of audit log entries to keep
-  private readonly MAX_TREND_POINTS = 1000; // Maximum number of trend data points to keep
+  // Configuration (reduced for performance)
+  private readonly MAX_SNAPSHOTS = 500; // Maximum number of holding snapshots to keep
+  private readonly MAX_BREACH_EVENTS = 300; // Maximum number of breach events to keep
+  private readonly MAX_AUDIT_ENTRIES = 500; // Maximum number of audit log entries to keep
+  private readonly MAX_TREND_POINTS = 200; // Maximum number of trend data points to keep
   private readonly SNAPSHOT_INTERVAL_MS = 60000; // Take snapshots every 60 seconds
   private readonly TREND_INTERVAL_MS = 300000; // Create trend points every 5 minutes
 
