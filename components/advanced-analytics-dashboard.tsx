@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, memo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,6 +44,7 @@ interface AnalyticsMetrics {
     ownershipPercent: number;
     buyingVelocity: number;
     timeToBreach: string | null;
+    rank: number;
   }>;
 }
 
@@ -52,6 +53,10 @@ export default function AdvancedAnalyticsDashboard() {
   const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d" | "all">("7d");
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<Jurisdiction | "all">("all");
 
+  // OPTIMIZED: Memoize holdings length and tickers to prevent unnecessary recalculations
+  const holdingsLength = holdings.length;
+  const holdingsTickers = useMemo(() => holdings.map(h => h.ticker).join(','), [holdings]);
+  
   const metrics = useMemo(() => {
     const now = new Date();
     let startTime: string | undefined;
@@ -64,9 +69,10 @@ export default function AdvancedAnalyticsDashboard() {
       startTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
     }
 
+    // OPTIMIZED: Limit breach events query to reduce computation
     const breachEvents = historicalDataStore.queryBreachEvents({
       startTime,
-      limit: 1000,
+      limit: 500, // Reduced from 1000
     });
 
     // Calculate risk status for each holding
@@ -82,7 +88,7 @@ export default function AdvancedAnalyticsDashboard() {
         status = "warning";
       }
 
-      // Calculate time to breach
+      // Calculate time to breach (negative for breaches, positive for warnings)
       const remainingToThreshold = threshold - ownershipPercent;
       const sharesToBreach = (remainingToThreshold / 100) * (holding.totalSharesOutstanding / 100);
       const timeToBreach = holding.buyingVelocity > 0 
@@ -179,12 +185,13 @@ export default function AdvancedAnalyticsDashboard() {
         }
         return b.ownershipPercent - a.ownershipPercent;
       })
-      .slice(0, 5)
-      .map((h) => ({
+      .slice(0, 10)
+      .map((h, index) => ({
         ticker: h.ticker,
         ownershipPercent: h.ownershipPercent,
         buyingVelocity: h.buyingVelocity,
-        timeToBreach: h.timeToBreach ? `${h.timeToBreach.toFixed(1)}h` : null,
+        timeToBreach: h.timeToBreach !== null ? `${h.timeToBreach.toFixed(1)}h` : null,
+        rank: index + 1,
       }));
 
     return {
@@ -202,7 +209,7 @@ export default function AdvancedAnalyticsDashboard() {
       avgTimeToBreach,
       topRiskHoldings,
     } as AnalyticsMetrics;
-  }, [holdings, timeRange, selectedJurisdiction]);
+  }, [holdings, holdingsLength, holdingsTickers, timeRange, selectedJurisdiction]);
 
   const jurisdictions: Jurisdiction[] = ["USA", "UK", "Hong Kong", "APAC", "Other"];
 
@@ -357,12 +364,12 @@ export default function AdvancedAnalyticsDashboard() {
             <div className="space-y-2">
               {metrics.topRiskHoldings.map((holding, index) => (
                 <div
-                  key={holding.ticker}
+                  key={`${holding.ticker}-${index}`}
                   className="flex items-center justify-between p-3 border rounded-lg bg-muted/30"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold">
-                      {index + 1}
+                      {holding.rank}
                     </div>
                     <div>
                       <div className="font-mono font-semibold text-sm">{holding.ticker}</div>
@@ -379,7 +386,9 @@ export default function AdvancedAnalyticsDashboard() {
                     {holding.timeToBreach && (
                       <div>
                         <div className="text-muted-foreground">Time to Breach</div>
-                        <div className="font-medium text-orange-500">{holding.timeToBreach}</div>
+                        <div className={`font-medium ${holding.timeToBreach.startsWith('-') ? 'text-red-500' : 'text-orange-500'}`}>
+                          {holding.timeToBreach}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -483,7 +492,7 @@ interface MetricCardProps {
   variant?: "default" | "danger" | "warning" | "success";
 }
 
-function MetricCard({ title, value, icon, trend, subtitle, variant = "default" }: MetricCardProps) {
+const MetricCard = memo(function MetricCard({ title, value, icon, trend, subtitle, variant = "default" }: MetricCardProps) {
   const variantStyles = {
     default: "border-border",
     danger: "border-red-500/40 bg-red-500/5",
@@ -517,5 +526,5 @@ function MetricCard({ title, value, icon, trend, subtitle, variant = "default" }
       )}
     </Card>
   );
-}
+});
 

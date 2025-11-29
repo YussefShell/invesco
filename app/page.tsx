@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import RiskHeatmap from "@/components/risk-heatmap";
 import PredictiveBreachTable from "@/components/predictive-breach-table";
 import CompliancePanel from "@/components/compliance-panel";
@@ -19,16 +19,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useRisk, type AggregationScope } from "@/components/RiskContext";
-import TableauRiskDashboard from "@/components/tableau-risk-dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import TimeTravelAuditView from "@/components/TimeTravelAuditView";
-import HistoricalBreachViewer from "@/components/historical-breach-viewer";
-import TrendAnalysisViewer from "@/components/trend-analysis-viewer";
-import HistoricalDataStatus from "@/components/historical-data-status";
-import NotificationManager from "@/components/notification-manager";
-import ExportManager from "@/components/export-manager";
 import { NotificationMonitor } from "@/components/notification-monitor";
 import AdvancedAnalyticsDashboard from "@/components/advanced-analytics-dashboard";
+
+// OPTIMIZED: Lazy load heavy components to improve initial load time
+const TableauRiskDashboard = lazy(() => import("@/components/tableau-risk-dashboard"));
+const TimeTravelAuditView = lazy(() => import("@/components/TimeTravelAuditView"));
+const HistoricalBreachViewer = lazy(() => import("@/components/historical-breach-viewer"));
+const TrendAnalysisViewer = lazy(() => import("@/components/trend-analysis-viewer"));
+const HistoricalDataStatus = lazy(() => import("@/components/historical-data-status"));
+const NotificationManager = lazy(() => import("@/components/notification-manager"));
+const ExportManager = lazy(() => import("@/components/export-manager"));
 
 export default function Dashboard() {
   const { setSelectedTicker } = usePortfolio();
@@ -209,7 +211,9 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <TableauRiskDashboard />
+              <Suspense fallback={<div className="h-64 flex items-center justify-center text-muted-foreground">Loading analytics...</div>}>
+                <TableauRiskDashboard />
+              </Suspense>
             </CardContent>
           </Card>
         </div>
@@ -308,32 +312,44 @@ export default function Dashboard() {
 
         {/* Audit Time-Travel Explorer */}
         <div>
-          <TimeTravelAuditView />
+          <Suspense fallback={<div className="h-32 flex items-center justify-center text-muted-foreground">Loading time-travel view...</div>}>
+            <TimeTravelAuditView />
+          </Suspense>
         </div>
 
         {/* Historical Data Status */}
         <div>
-          <HistoricalDataStatus />
+          <Suspense fallback={<div className="h-24 flex items-center justify-center text-muted-foreground">Loading data status...</div>}>
+            <HistoricalDataStatus />
+          </Suspense>
         </div>
 
         {/* Historical Breach Tracking */}
         <div>
-          <HistoricalBreachViewer />
+          <Suspense fallback={<div className="h-32 flex items-center justify-center text-muted-foreground">Loading breach history...</div>}>
+            <HistoricalBreachViewer />
+          </Suspense>
         </div>
 
         {/* Trend Analysis */}
         <div>
-          <TrendAnalysisViewer />
+          <Suspense fallback={<div className="h-32 flex items-center justify-center text-muted-foreground">Loading trend analysis...</div>}>
+            <TrendAnalysisViewer />
+          </Suspense>
         </div>
 
         {/* Notification Manager */}
         <div>
-          <NotificationManager />
+          <Suspense fallback={<div className="h-32 flex items-center justify-center text-muted-foreground">Loading notifications...</div>}>
+            <NotificationManager />
+          </Suspense>
         </div>
 
         {/* Export Manager */}
         <div>
-          <ExportManager />
+          <Suspense fallback={<div className="h-32 flex items-center justify-center text-muted-foreground">Loading export manager...</div>}>
+            <ExportManager />
+          </Suspense>
         </div>
       </main>
 

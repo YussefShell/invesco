@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, memo } from "react";
 import React from "react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
@@ -43,7 +43,7 @@ interface FilterState {
   dataFreshness: DataFreshnessFilter;
 }
 
-export default function PredictiveBreachTable({
+function PredictiveBreachTable({
   onRowClick,
 }: PredictiveBreachTableProps) {
   const { holdings } = usePortfolio();
@@ -668,4 +668,7 @@ function PredictiveRow({
     </motion.tr>
   );
 }
+
+// OPTIMIZED: Memoize component to prevent unnecessary re-renders
+export default memo(PredictiveBreachTable);
 

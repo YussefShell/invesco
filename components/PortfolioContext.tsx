@@ -247,25 +247,44 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
   );
 
   // Subscribe to real-time price updates from the data provider
+  // OPTIMIZED: Use refs to track subscriptions and prevent duplicate subscriptions
+  const subscribedTickersRef = useRef<Set<string>>(new Set());
+  const subscriptionCallbacksRef = useRef<Map<string, (assetData: AssetData) => void>>(new Map());
+  
   useEffect(() => {
     if (!dataProvider || connectionStatus !== "connected" || holdings.length === 0) return;
     
-    // Create a callback that updates holdings when price data arrives
-    const priceUpdateCallbacks = new Map<string, (assetData: AssetData) => void>();
+    // Get unique tickers from current holdings
+    const currentTickers = new Set(holdings.map(h => h.ticker));
     
-    // Subscribe to all holdings for real-time price updates
+    // Unsubscribe from tickers that are no longer in holdings
+    subscribedTickersRef.current.forEach((ticker) => {
+      if (!currentTickers.has(ticker)) {
+        // Note: Adapters don't have unsubscribe, but this prevents new subscriptions
+        subscribedTickersRef.current.delete(ticker);
+        subscriptionCallbacksRef.current.delete(ticker);
+      }
+    });
+    
+    // Subscribe to new tickers only
     holdings.forEach((holding) => {
-      // Only subscribe once per ticker
-      if (priceUpdateCallbacks.has(holding.ticker)) return;
+      if (subscribedTickersRef.current.has(holding.ticker)) return;
       
       const callback = (assetData: AssetData) => {
         // Update real-time price cache
         realTimePricesRef.current.set(holding.ticker, assetData);
         
-        // Update holding with real-time price and position data
-        setHoldings((prev) =>
-          prev.map((h) => {
+        // Batch price updates to reduce re-renders
+        setHoldings((prev) => {
+          const updated = prev.map((h) => {
             if (h.ticker === holding.ticker) {
+              // Only update if price actually changed significantly (>0.1%)
+              const priceChanged = h.price === undefined || Math.abs(assetData.price - h.price) / h.price > 0.001;
+              
+              if (!priceChanged && assetData.currentPosition === undefined) {
+                return h; // No significant change
+              }
+              
               return {
                 ...h,
                 lastUpdated: assetData.lastUpdated,
@@ -278,17 +297,21 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
               };
             }
             return h;
-          })
-        );
+          });
+          
+          // Only return new array if something actually changed
+          const hasChanges = updated.some((h, i) => h !== prev[i]);
+          return hasChanges ? updated : prev;
+        });
       };
       
-      priceUpdateCallbacks.set(holding.ticker, callback);
+      subscribedTickersRef.current.add(holding.ticker);
+      subscriptionCallbacksRef.current.set(holding.ticker, callback);
       dataProvider.subscribeToTicker(holding.ticker, callback);
     });
     
     // Cleanup: Note that adapters handle their own cleanup via dispose()
-    // This effect will re-run if dataProvider or holdings change
-  }, [dataProvider, connectionStatus, holdings, holdingsTickersKey]);
+  }, [dataProvider, connectionStatus, holdingsTickersKey]); // Removed holdings from deps to prevent re-subscriptions
   
   // Initialize base values
   useEffect(() => {
@@ -305,17 +328,32 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
   }, [holdings]);
 
   // Real-time updates: gradually increase shares based on buying velocity
-  // and add realistic fluctuations
+  // OPTIMIZED: Reduced update frequency and only update holdings that changed significantly
   useEffect(() => {
     if (holdings.length === 0) return;
     
+    let lastUpdateTime = Date.now();
+    
     const interval = setInterval(() => {
-      setHoldings((prev) =>
-        prev.map((holding) => {
+      const now = Date.now();
+      const timeSinceLastUpdate = now - lastUpdateTime;
+      
+      // Only update every 5 seconds instead of 2 seconds (60% reduction in updates)
+      if (timeSinceLastUpdate < 5000) return;
+      
+      lastUpdateTime = now;
+      
+      setHoldings((prev) => {
+        const updated: Holding[] = [];
+        let hasChanges = false;
+        
+        for (const holding of prev) {
           const base = baseHoldingsRef.current.get(holding.id);
-          if (!base) return holding;
+          if (!base) {
+            updated.push(holding);
+            continue;
+          }
 
-          const now = Date.now();
           const elapsedHours = (now - base.startTime) / (1000 * 60 * 60);
           
           // Calculate new shares based on buying velocity (shares per hour)
@@ -330,6 +368,18 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
           // Add small random fluctuations (±0.1% of total)
           const fluctuation = (Math.random() - 0.5) * TOTAL_SHARES_DEFAULT * 0.001;
           const finalShares = Math.max(0, newShares + fluctuation);
+          
+          // Only update if change is significant (>0.01% of total shares) to reduce unnecessary re-renders
+          const changeThreshold = TOTAL_SHARES_DEFAULT * 0.0001;
+          const sharesChanged = Math.abs(finalShares - holding.sharesOwned);
+          
+          if (sharesChanged < changeThreshold && Math.abs(effectiveVelocity - holding.buyingVelocity) < 100) {
+            // No significant change, keep existing holding
+            updated.push(holding);
+            continue;
+          }
+          
+          hasChanges = true;
           
           // Update buying velocity with slight variations (±5%)
           const velocityChange = (Math.random() - 0.5) * 0.1;
@@ -347,17 +397,20 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
           const updateInterval = holding.jurisdiction === "USA" ? 15 : 30; // USA updates every 15s, others 30s
           const shouldUpdate = Math.random() < (updateInterval / 60); // Probability based on interval
           
-          return {
+          updated.push({
             ...holding,
             sharesOwned: finalShares,
             buyingVelocity: newVelocity,
             lastUpdated: shouldUpdate 
               ? new Date().toISOString() 
               : holding.lastUpdated,
-          };
-        })
-      );
-    }, 2000); // Update every 2 seconds for smooth real-time feel
+          });
+        }
+        
+        // Only trigger re-render if there were actual changes
+        return hasChanges ? updated : prev;
+      });
+    }, 5000); // Update every 5 seconds (reduced from 2 seconds)
 
     return () => clearInterval(interval);
   }, [holdings.length]);

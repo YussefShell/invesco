@@ -29,22 +29,23 @@ export class MockAdapter implements IPortfolioDataProvider {
 
   async connect(): Promise<boolean> {
     // Immediate success in simulation mode
-    // Start high-frequency market data generation
+    // OPTIMIZED: Reduced update frequency to prevent performance issues
     
-    // High-frequency updates (every 200-500ms) for active subscribers
-    // This simulates real market data feeds with very high trade volume
+    // High-frequency updates (every 1-2 seconds) for active subscribers
+    // Reduced from 250-500ms to reduce CPU load
     if (!this.highFrequencyInterval) {
       this.highFrequencyInterval = setInterval(() => {
         this.emitHighFrequencyTicks();
-      }, 250 + Math.random() * 250); // 250-500ms intervals (2-4 updates per second)
+      }, 1000 + Math.random() * 1000); // 1-2 second intervals (reduced from 250-500ms)
     }
     
-    // Standard updates for all subscribed tickers (every 1-2 seconds)
+    // Standard updates for all subscribed tickers (every 3-5 seconds)
+    // Reduced from 1-2 seconds to reduce re-renders
     if (!this.tickInterval) {
       this.tickInterval = setInterval(() => {
         this.emitAllTicks();
         this.simulateLatency();
-      }, 1000 + Math.random() * 1000); // 1-2 second intervals
+      }, 3000 + Math.random() * 2000); // 3-5 second intervals (reduced from 1-2 seconds)
     }
     
     return true;
@@ -184,16 +185,17 @@ export class MockAdapter implements IPortfolioDataProvider {
   }
 
   /**
-   * Emit high-frequency updates (2-4 times per second) for active subscribers
-   * This simulates real market data feeds with very high trade volume
+   * Emit high-frequency updates (optimized to reduce load)
+   * OPTIMIZED: Reduced update percentage to prevent overwhelming the UI
    */
   private emitHighFrequencyTicks() {
     // Update a random subset of active subscribers (simulating high trade volume)
     const subscribers = Array.from(this.subscribers.entries());
     if (subscribers.length === 0) return;
     
-    // Update 30-50% of subscribed tickers each high-frequency cycle
-    const updateCount = Math.max(1, Math.floor(subscribers.length * (0.3 + Math.random() * 0.2)));
+    // Update 10-20% of subscribed tickers each cycle (reduced from 30-50%)
+    // This still provides real-time feel without overwhelming the browser
+    const updateCount = Math.max(1, Math.floor(subscribers.length * (0.1 + Math.random() * 0.1)));
     const shuffled = [...subscribers].sort(() => Math.random() - 0.5);
     
     for (let i = 0; i < updateCount && i < shuffled.length; i++) {

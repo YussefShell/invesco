@@ -65,22 +65,35 @@ export function NotificationMonitor() {
     }
   }, [notificationService]);
 
+  // OPTIMIZED: Use ref to track holdings and reduce effect re-runs
+  const holdingsRef = useRef(holdings);
+  useEffect(() => {
+    holdingsRef.current = holdings;
+  }, [holdings]);
+
   useEffect(() => {
     if (holdings.length === 0) return;
 
+    // OPTIMIZED: Check every 60 seconds instead of 30 (reduced by 50%)
     const checkInterval = setInterval(() => {
-      holdings.forEach((holding) => {
+      // Only check holdings that might have changed status
+      holdingsRef.current.forEach((holding) => {
         checkHoldingForAlerts(holding);
       });
-    }, 30000); // Check every 30 seconds
+    }, 60000); // Check every 60 seconds (reduced from 30 seconds)
 
-    // Initial check
-    holdings.forEach((holding) => {
-      checkHoldingForAlerts(holding);
-    });
+    // Initial check (debounced)
+    const initialTimeout = setTimeout(() => {
+      holdingsRef.current.forEach((holding) => {
+        checkHoldingForAlerts(holding);
+      });
+    }, 2000); // Wait 2 seconds after mount
 
-    return () => clearInterval(checkInterval);
-  }, [holdings, checkHoldingForAlerts]);
+    return () => {
+      clearInterval(checkInterval);
+      clearTimeout(initialTimeout);
+    };
+  }, [holdings.length, checkHoldingForAlerts]); // Only depend on length, not full holdings array
 
   return null; // This component doesn't render anything
 }
