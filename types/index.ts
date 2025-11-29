@@ -41,6 +41,16 @@ export interface Holding {
    * Real-time price from market data adapter (optional, populated when adapter is connected).
    */
   price?: number;
+  /**
+   * Fund identifier - identifies which fund this holding belongs to.
+   * Used for entity aggregation (Fund vs Group level view).
+   */
+  fundId?: string;
+  /**
+   * Parent entity identifier - used for grouping funds under a parent company.
+   * When aggregating at Group level, holdings with the same parentId are summed.
+   */
+  parentId?: string;
 }
 
 export interface BreachCalculation {
@@ -48,6 +58,11 @@ export interface BreachCalculation {
   status: RegulatoryStatus;
   timeToBreach: string; // formatted string like "Breach in 2.5 Hours" or "Safe"
 }
+
+/**
+ * Alert status for breach workflow (Maker-Checker Protocol)
+ */
+export type AlertStatus = "OPEN" | "ACKNOWLEDGED" | "PENDING_SUPERVISOR_REVIEW" | "DISMISSED" | "RESOLVED";
 
 export interface JurisdictionStatus {
   jurisdiction: Jurisdiction;

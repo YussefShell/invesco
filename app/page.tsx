@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useRisk } from "@/components/RiskContext";
+import { useRisk, type AggregationScope } from "@/components/RiskContext";
 import TableauRiskDashboard from "@/components/tableau-risk-dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import TimeTravelAuditView from "@/components/TimeTravelAuditView";
@@ -45,6 +45,8 @@ export default function Dashboard() {
     connectionError,
     productionAdapterType,
     setProductionAdapterType,
+    aggregationScope,
+    setAggregationScope,
   } = useRisk();
 
   useEffect(() => {
@@ -124,6 +126,33 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Scope Toggle - Entity Aggregation Engine */}
+              <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-card">
+                <span className="text-xs text-muted-foreground font-medium">View:</span>
+                <button
+                  type="button"
+                  onClick={() => setAggregationScope("FUND")}
+                  className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                    aggregationScope === "FUND"
+                      ? "bg-primary text-primary-foreground font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Fund Level
+                </button>
+                <span className="text-xs text-muted-foreground">|</span>
+                <button
+                  type="button"
+                  onClick={() => setAggregationScope("GROUP")}
+                  className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                    aggregationScope === "GROUP"
+                      ? "bg-primary text-primary-foreground font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Group Level
+                </button>
+              </div>
               <Button
                 variant="outline"
                 size="icon"

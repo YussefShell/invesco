@@ -14,15 +14,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { usePortfolio } from "@/components/PortfolioContext";
+import { useRisk } from "@/components/RiskContext";
 import { useRiskCalculator } from "@/lib/use-risk-calculator";
+import { getGroupExposure } from "@/lib/exposure-aggregation";
+import { evaluateRisk } from "@/lib/compliance-rules-engine";
 import type { Holding } from "@/types";
 import { AlertTriangle, CheckCircle2, XCircle, Filter, X } from "lucide-react";
 import { calculateBusinessDeadline } from "@/lib/compliance-rules-engine";
 import { useAuditLog } from "@/components/AuditLogContext";
 import { historicalDataStore } from "@/lib/historical-data-store";
 import AdvancedFilter, { type AdvancedFilterConfig } from "@/components/advanced-filter";
-import { applyAdvancedFilter } from "@/lib/filter-utils";
-import { highlightSearchText } from "@/lib/filter-utils";
+import { applyAdvancedFilter, highlightSearchText } from "@/lib/filter-utils";
+import { EscalationModal } from "@/components/escalation-modal";
+import type { AlertStatus } from "@/types";
 
 interface PredictiveBreachTableProps {
   onRowClick: (ticker: string) => void;
@@ -43,30 +47,81 @@ export default function PredictiveBreachTable({
   onRowClick,
 }: PredictiveBreachTableProps) {
   const { holdings } = usePortfolio();
+  const { aggregationScope } = useRisk();
   const [advancedFilterConfig, setAdvancedFilterConfig] = useState<AdvancedFilterConfig>({});
   const [useAdvancedFilter, setUseAdvancedFilter] = useState(true);
 
   // Helper function to get risk status for a holding
-  const getRiskStatus = (holding: Holding): "breach" | "warning" | "safe" => {
-    const ownershipPercent = (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+  const getRiskStatus = (holding: Holding, ownershipPercent?: number): "breach" | "warning" | "safe" => {
+    const percent = ownershipPercent ?? (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
     const threshold = holding.regulatoryRule.threshold;
     const warningMin = threshold * 0.9;
     
-    if (ownershipPercent >= threshold) {
+    if (percent >= threshold) {
       return "breach";
-    } else if (ownershipPercent >= warningMin && ownershipPercent < threshold) {
+    } else if (percent >= warningMin && percent < threshold) {
       return "warning";
     }
     return "safe";
   };
 
-  const filteredHoldings = useMemo(() => {
-    if (useAdvancedFilter) {
-      return applyAdvancedFilter(holdings, advancedFilterConfig, getRiskStatus);
+  // Aggregate holdings by ticker when scope is GROUP
+  const processedHoldings = useMemo(() => {
+    if (aggregationScope === "GROUP") {
+      // Group holdings by ticker
+      const tickerMap = new Map<string, Holding[]>();
+      holdings.forEach((holding) => {
+        const existing = tickerMap.get(holding.ticker) || [];
+        tickerMap.set(holding.ticker, [...existing, holding]);
+      });
+
+      // Create aggregated holdings (one per ticker)
+      const aggregated: Holding[] = [];
+      tickerMap.forEach((tickerHoldings, ticker) => {
+        if (tickerHoldings.length === 0) return;
+
+        // Use the first holding as a template
+        const baseHolding = tickerHoldings[0];
+        
+        // Sum up shares and buying velocity
+        const totalShares = tickerHoldings.reduce((sum, h) => sum + h.sharesOwned, 0);
+        const totalBuyingVelocity = tickerHoldings.reduce((sum, h) => sum + h.buyingVelocity, 0);
+        
+        // Use the most recent lastUpdated
+        const mostRecent = tickerHoldings.reduce((latest, h) => 
+          new Date(h.lastUpdated) > new Date(latest.lastUpdated) ? h : latest
+        );
+
+        aggregated.push({
+          ...baseHolding,
+          id: `AGG-${ticker}`,
+          sharesOwned: totalShares,
+          buyingVelocity: totalBuyingVelocity,
+          lastUpdated: mostRecent.lastUpdated,
+          // Remove fundId/parentId for aggregated view
+          fundId: undefined,
+          parentId: undefined,
+        });
+      });
+
+      // Apply filters to aggregated holdings
+      if (useAdvancedFilter) {
+        return applyAdvancedFilter(aggregated, advancedFilterConfig, (h) => {
+          const groupExposure = getGroupExposure(holdings, h.ticker);
+          return getRiskStatus(h, groupExposure);
+        });
+      }
+      return aggregated;
+    } else {
+      // FUND scope: use holdings as-is
+      if (useAdvancedFilter) {
+        return applyAdvancedFilter(holdings, advancedFilterConfig, getRiskStatus);
+      }
+      return holdings;
     }
-    // Fallback to original filtering logic if needed
-    return holdings;
-  }, [holdings, advancedFilterConfig, useAdvancedFilter]);
+  }, [holdings, aggregationScope, advancedFilterConfig, useAdvancedFilter]);
+
+  const filteredHoldings = processedHoldings;
 
   const getStatusBadge = (status: string, timeToBreach: string) => {
     if (status === "breach") {
@@ -170,6 +225,9 @@ export default function PredictiveBreachTable({
                   shouldPulse={shouldPulse}
                   getStatusBadge={getStatusBadge}
                   formatNumber={formatNumber}
+                  aggregationScope={aggregationScope}
+                  allHoldings={holdings}
+                  advancedFilterConfig={advancedFilterConfig}
                 />
               ))}
             </tbody>
@@ -186,6 +244,9 @@ interface PredictiveRowProps {
   shouldPulse: (status: string, buyingVelocity: number) => boolean;
   getStatusBadge: (status: string, timeToBreach: string) => React.ReactNode;
   formatNumber: (num: number) => string;
+  aggregationScope: "FUND" | "GROUP";
+  allHoldings: Holding[];
+  advancedFilterConfig: AdvancedFilterConfig;
 }
 
 function PredictiveRow({
@@ -194,16 +255,62 @@ function PredictiveRow({
   shouldPulse,
   getStatusBadge,
   formatNumber,
+  aggregationScope,
+  allHoldings,
+  advancedFilterConfig,
 }: PredictiveRowProps) {
-  const { breach, compliance, ownershipPercent } = useRiskCalculator(
-    holding.ticker
-  );
   const { appendLog } = useAuditLog();
-  const [breachStatus, setBreachStatus] = useState<"OPEN" | "ACK" | "RESOLVED">(
-    "OPEN"
-  );
-
+  const [alertStatus, setAlertStatus] = useState<AlertStatus>("OPEN");
+  const [isEscalationModalOpen, setIsEscalationModalOpen] = useState(false);
+  
   const previousBreachStatusRef = React.useRef<"breach" | "warning" | "safe" | null>(null);
+  
+  // Calculate ownership percent based on scope
+  const ownershipPercent = useMemo(() => {
+    if (aggregationScope === "GROUP") {
+      // Use aggregated exposure for group level
+      return getGroupExposure(allHoldings, holding.ticker);
+    } else {
+      // Use individual holding exposure for fund level
+      return (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+    }
+  }, [aggregationScope, allHoldings, holding.ticker, holding.sharesOwned, holding.totalSharesOutstanding]);
+
+  // Calculate breach and compliance based on aggregated exposure
+  const breach = useMemo(() => {
+    const threshold = holding.regulatoryRule.threshold;
+    const warningMin = threshold * 0.9;
+    
+    if (ownershipPercent >= threshold) {
+      return {
+        status: "breach" as const,
+        projectedBreachTime: 0,
+        timeToBreach: "Active Breach",
+      };
+    } else if (ownershipPercent >= warningMin && ownershipPercent < threshold) {
+      // Calculate time to breach based on buying velocity
+      if (holding.buyingVelocity > 0) {
+        const sharesToBreach = (threshold / 100) * holding.totalSharesOutstanding - holding.sharesOwned;
+        const hoursToBreach = sharesToBreach / holding.buyingVelocity;
+        return {
+          status: "warning" as const,
+          projectedBreachTime: hoursToBreach,
+          timeToBreach: hoursToBreach < 24 
+            ? `Breach in ${hoursToBreach.toFixed(1)}h`
+            : `Breach in ${(hoursToBreach / 24).toFixed(1)}d`,
+        };
+      }
+    }
+    return {
+      status: "safe" as const,
+      projectedBreachTime: null,
+      timeToBreach: "Safe",
+    };
+  }, [ownershipPercent, holding.regulatoryRule.threshold, holding.totalSharesOutstanding, holding.sharesOwned, holding.buyingVelocity]);
+
+  const compliance = useMemo(() => {
+    return evaluateRisk(holding.jurisdiction, ownershipPercent, "long");
+  }, [holding.jurisdiction, ownershipPercent]);
 
   useEffect(() => {
     if (!breach || !ownershipPercent) return;
@@ -340,12 +447,55 @@ function PredictiveRow({
 
   const pulse = shouldPulse(breach.status, holding.buyingVelocity);
 
+  // Check if this is a high-severity alert (BREACH status)
+  const isHighSeverity = breach.status === "breach";
+
+  const handleDismissRequest = () => {
+    if (isHighSeverity) {
+      // Open escalation modal for high-severity alerts
+      setIsEscalationModalOpen(true);
+    } else {
+      // For non-high-severity alerts, allow direct dismissal
+      handleDismissConfirmed("");
+    }
+  };
+
+  const handleDismissConfirmed = (justification: string) => {
+    const timestamp = new Date().toISOString();
+    const systemId = "RISK-ENGINE-01";
+    
+    if (isHighSeverity && justification) {
+      // Change status to PENDING_SUPERVISOR_REVIEW
+      setAlertStatus("PENDING_SUPERVISOR_REVIEW");
+      
+      // Log to audit trail
+      const line = `[${timestamp}] [${systemId}] [BREACH_WORKFLOW]: User requested dismissal for ${holding.ticker} (${holding.issuer}). Status: PENDING_SUPERVISOR_REVIEW. Justification: ${justification}`;
+      appendLog(line);
+      
+      // Record in historical data store
+      historicalDataStore.recordBreachEvent({
+        ticker: holding.ticker,
+        jurisdiction: holding.jurisdiction,
+        eventType: "BREACH_ACKNOWLEDGED",
+        ownershipPercent: ownershipPercent || 0,
+        threshold: holding.regulatoryRule.threshold,
+        buyingVelocity: holding.buyingVelocity,
+        projectedBreachTime: breach?.projectedBreachTime,
+        metadata: {
+          alertStatus: "PENDING_SUPERVISOR_REVIEW",
+          justification,
+          requiresSupervisorApproval: true,
+        },
+      });
+    }
+  };
+
   const handleWorkflowAction = (action: "ACK" | "RESOLVED") => {
     const timestamp = new Date().toISOString();
     const systemId = "RISK-ENGINE-01";
-    const previous = breachStatus;
-    const next = action === "ACK" ? "ACK" : "RESOLVED";
-    setBreachStatus(next);
+    const previous = alertStatus;
+    const next = action === "ACK" ? "ACKNOWLEDGED" : "RESOLVED";
+    setAlertStatus(next);
     const line = `[${timestamp}] [${systemId}] [BREACH_WORKFLOW]: ${holding.ticker} status changed from ${previous} to ${next} by user. Jurisdiction=${holding.jurisdiction}.`;
     appendLog(line);
     
@@ -455,8 +605,8 @@ function PredictiveRow({
         <div className="flex flex-col gap-1">
           {getStatusBadge(breach.status, breach.timeToBreach)}
           {breach.status === "breach" && (
-            <div className="flex gap-1 justify-start">
-              {breachStatus === "OPEN" && (
+            <div className="flex gap-1 justify-start flex-wrap">
+              {alertStatus === "OPEN" && (
                 <button
                   className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/40"
                   onClick={(e) => {
@@ -467,18 +617,23 @@ function PredictiveRow({
                   Acknowledge
                 </button>
               )}
-              {breachStatus !== "RESOLVED" && (
+              {alertStatus !== "RESOLVED" && alertStatus !== "DISMISSED" && (
                 <button
-                  className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/40"
+                  className="text-[10px] px-2 py-0.5 rounded bg-red-500/10 text-red-500 border border-red-500/40"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleWorkflowAction("RESOLVED");
+                    handleDismissRequest();
                   }}
                 >
-                  Mark Resolved
+                  Dismiss
                 </button>
               )}
-              {breachStatus === "RESOLVED" && (
+              {alertStatus === "PENDING_SUPERVISOR_REVIEW" && (
+                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-600 border border-amber-500/40 font-semibold">
+                  Pending Review
+                </span>
+              )}
+              {alertStatus === "RESOLVED" && (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/40">
                   Resolved
                 </span>
@@ -503,6 +658,13 @@ function PredictiveRow({
           View Details
         </button>
       </td>
+      <EscalationModal
+        open={isEscalationModalOpen}
+        onOpenChange={setIsEscalationModalOpen}
+        ticker={holding.ticker}
+        issuer={holding.issuer}
+        onConfirm={handleDismissConfirmed}
+      />
     </motion.tr>
   );
 }

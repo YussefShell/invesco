@@ -18,6 +18,7 @@ export type DataSource = "mock" | "prod-rest" | "prod-ws";
 export type ProductionAdapterType = "rest" | "websocket";
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
+export type AggregationScope = "FUND" | "GROUP";
 
 interface RiskContextValue {
   dataSource: DataSource;
@@ -28,6 +29,8 @@ interface RiskContextValue {
   productionAdapterType: ProductionAdapterType;
   setProductionAdapterType: (type: ProductionAdapterType) => void;
   dataProvider: IPortfolioDataProvider | null;
+  aggregationScope: AggregationScope;
+  setAggregationScope: (scope: AggregationScope) => void;
 }
 
 const RiskContext = createContext<RiskContextValue | undefined>(undefined);
@@ -43,6 +46,7 @@ export const RiskProvider: React.FC<React.PropsWithChildren> = ({
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [latency, setLatency] = useState<number | null>(12);
   const [dataProvider, setDataProvider] = useState<IPortfolioDataProvider | null>(null);
+  const [aggregationScope, setAggregationScope] = useState<AggregationScope>("FUND");
 
   const providerRef = useRef<IPortfolioDataProvider | null>(null);
 
@@ -113,6 +117,8 @@ export const RiskProvider: React.FC<React.PropsWithChildren> = ({
       productionAdapterType,
       setProductionAdapterType,
       dataProvider,
+      aggregationScope,
+      setAggregationScope,
     }),
     [
       dataSource,
@@ -121,6 +127,7 @@ export const RiskProvider: React.FC<React.PropsWithChildren> = ({
       latency,
       productionAdapterType,
       dataProvider,
+      aggregationScope,
     ]
   );
 

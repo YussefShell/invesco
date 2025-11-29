@@ -142,7 +142,9 @@ export default function AdvancedAnalyticsDashboard() {
       const jur = holding.jurisdiction;
       if (byJurisdiction[jur]) {
         byJurisdiction[jur].holdings++;
-        byJurisdiction[jur][holding.status]++;
+        // Map status to property name (breach -> breaches, warning -> warnings, safe -> safe)
+        const statusKey = holding.status === "breach" ? "breaches" : holding.status === "warning" ? "warnings" : "safe";
+        byJurisdiction[jur][statusKey]++;
         byJurisdiction[jur].avgOwnership += holding.ownershipPercent;
       }
     });

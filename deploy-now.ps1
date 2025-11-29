@@ -19,7 +19,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "   npx vercel@latest login" -ForegroundColor White
     Write-Host ""
     
-    $login = Read-Host "Press Enter after you've logged in, or type 'skip' to deploy via GitHub instead"
+    $login = Read-Host "Press Enter after you've logged in, or type skip to deploy via GitHub instead"
     
     if ($login -eq "skip") {
         Write-Host ""

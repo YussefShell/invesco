@@ -148,7 +148,9 @@ export function applyAdvancedFilter<T extends Holding>(
 export function highlightSearchText(text: string, searchTerm: string): React.ReactNode {
   if (!searchTerm.trim()) return text;
   
-  const regex = new RegExp(`(${searchTerm})`, "gi");
+  // Escape special regex characters in search term
+  const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escapedSearchTerm})`, "gi");
   const parts = text.split(regex);
   
   return parts.map((part, index) => {

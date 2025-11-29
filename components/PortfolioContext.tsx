@@ -25,6 +25,7 @@ const createInitialHoldings = (): Holding[] => {
   const NOW = Date.now();
 
   // Start with a small set of handcrafted, realistic seed holdings
+  // Entity Aggregation Demo: NVIDIA holdings split across two funds
   const seedHoldings: Holding[] = [
     {
       id: "1",
@@ -32,11 +33,27 @@ const createInitialHoldings = (): Holding[] => {
       issuer: "NVIDIA Corp",
       isin: "US67066G1040",
       jurisdiction: "USA",
-      sharesOwned: TOTAL_SHARES_DEFAULT * 0.052,
+      sharesOwned: TOTAL_SHARES_DEFAULT * 0.028, // 2.8% - Invesco Tech ETF
       totalSharesOutstanding: TOTAL_SHARES_DEFAULT,
       buyingVelocity: 12_500,
       regulatoryRule: regulatoryRules[0],
       lastUpdated: new Date(NOW - 30 * 1000).toISOString(), // < 1 minute (fresh)
+      fundId: "INV-TECH-ETF",
+      parentId: "INVESCO-GROUP",
+    },
+    {
+      id: "1b",
+      ticker: "NVDA",
+      issuer: "NVIDIA Corp",
+      isin: "US67066G1040",
+      jurisdiction: "USA",
+      sharesOwned: TOTAL_SHARES_DEFAULT * 0.023, // 2.3% - Invesco Global Growth
+      totalSharesOutstanding: TOTAL_SHARES_DEFAULT,
+      buyingVelocity: 8_000,
+      regulatoryRule: regulatoryRules[0],
+      lastUpdated: new Date(NOW - 45 * 1000).toISOString(),
+      fundId: "INV-GLOBAL-GROWTH",
+      parentId: "INVESCO-GROUP",
     },
     {
       id: "2",
@@ -223,6 +240,12 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
     }
   }, [holdings.length]);
 
+  // Memoize the tickers string to avoid complex expression in dependency array
+  const holdingsTickersKey = useMemo(
+    () => holdings.map((h) => h.ticker).join(","),
+    [holdings]
+  );
+
   // Subscribe to real-time price updates from the data provider
   useEffect(() => {
     if (!dataProvider || connectionStatus !== "connected" || holdings.length === 0) return;
@@ -265,7 +288,7 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
     
     // Cleanup: Note that adapters handle their own cleanup via dispose()
     // This effect will re-run if dataProvider or holdings change
-  }, [dataProvider, connectionStatus, holdings.map(h => h.ticker).join(',')]);
+  }, [dataProvider, connectionStatus, holdings, holdingsTickersKey]);
   
   // Initialize base values
   useEffect(() => {
