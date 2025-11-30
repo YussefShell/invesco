@@ -1,4 +1,4 @@
-import { evaluateRisk } from "./lib/compliance-rules-engine";
+import { evaluateRisk } from "../compliance-rules-engine";
 
 function logScenario(
   label: string,
