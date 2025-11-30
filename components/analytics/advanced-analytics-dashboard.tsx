@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, memo } from "react";
+import { useMemo, useState, memo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -53,6 +53,17 @@ export default function AdvancedAnalyticsDashboard() {
   const { holdings } = usePortfolio();
   const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d" | "all">("7d");
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<Jurisdiction | "all">("all");
+  // Force refresh state to trigger re-query of breach events
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Poll for new breach events periodically to keep the view up-to-date
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshKey((prev) => prev + 1);
+    }, 5000); // Refresh every 5 seconds to catch new events
+
+    return () => clearInterval(interval);
+  }, []);
 
   // OPTIMIZED: Memoize holdings length and tickers to prevent unnecessary recalculations
   const holdingsLength = holdings.length;
@@ -221,7 +232,7 @@ export default function AdvancedAnalyticsDashboard() {
       avgTimeToBreach,
       topRiskHoldings,
     } as AnalyticsMetrics;
-  }, [holdings, timeRange, selectedJurisdiction]);
+  }, [holdings, timeRange, selectedJurisdiction, refreshKey]);
 
   const jurisdictions: Jurisdiction[] = ["USA", "UK", "Hong Kong", "APAC", "Other"];
 
