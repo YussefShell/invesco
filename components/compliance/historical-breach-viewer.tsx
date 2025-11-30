@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useRef } from "react";
 import React from "react";
@@ -133,9 +133,20 @@ function VirtualizedBreachEventsList({
 export default function HistoricalBreachViewer() {
   const [advancedFilterConfig, setAdvancedFilterConfig] = useState<AdvancedFilterConfig>({});
   const [useAdvancedFilter, setUseAdvancedFilter] = useState(true);
+  // Force refresh state to trigger re-query of breach events
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Use adaptive settings based on device capabilities
   const adaptiveSettings = useMemo(() => getAdaptiveSettings(), []);
+  
+  // Poll for new breach events periodically to keep the view up-to-date
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshKey((prev) => prev + 1);
+    }, 5000); // Refresh every 5 seconds to catch new events
+
+    return () => clearInterval(interval);
+  }, []);
   
   const breachEvents = useMemo(() => {
     let query: any = {
@@ -226,7 +237,7 @@ export default function HistoricalBreachViewer() {
     }
 
     return events;
-  }, [advancedFilterConfig, useAdvancedFilter, adaptiveSettings.isLowPower]);
+  }, [advancedFilterConfig, useAdvancedFilter, adaptiveSettings.isLowPower, refreshKey]);
 
   const statistics = useMemo(() => {
     const stats = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,6 +11,17 @@ import { TrendingUp, TrendingDown, Minus, BarChart3 } from "lucide-react";
 
 export default function TrendAnalysisViewer() {
   const [timeRange, setTimeRange] = useState<string>("24h");
+  // Force refresh state to trigger re-query of trend data
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Poll for new trend data points periodically to keep the view up-to-date
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshKey((prev) => prev + 1);
+    }, 10000); // Refresh every 10 seconds (trend data is collected every 5 minutes, so this is sufficient)
+
+    return () => clearInterval(interval);
+  }, []);
 
   const trendAnalysis = useMemo(() => {
     const now = new Date();
@@ -29,7 +40,7 @@ export default function TrendAnalysisViewer() {
     }
 
     return historicalDataStore.getTrendAnalysis(startTime, now.toISOString());
-  }, [timeRange]);
+  }, [timeRange, refreshKey]);
 
   const getTrendIcon = (trend: "increasing" | "decreasing" | "stable") => {
     switch (trend) {

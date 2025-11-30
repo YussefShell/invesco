@@ -463,7 +463,7 @@ export default function CompliancePanel({ open, onOpenChange }: CompliancePanelP
                               Filing Draft Generated
                             </p>
                             <p className="text-sm text-muted-foreground mb-3">
-                              The 13F filing draft has been generated and is ready
+                              The {compliance?.requiredForm || "Schedule 13D"} filing draft has been generated and is ready
                               for compliance review. All required data has been
                               validated and formatted according to regulatory
                               requirements.
