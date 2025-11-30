@@ -48,34 +48,53 @@ interface TableauVizProps {
 }
 
 // Pre-configured useful Tableau visualizations for regulatory risk management
-// Note: Replace these URLs with your own Tableau Server/Cloud visualizations
-const USEFUL_VISUALIZATIONS = [
-  {
-    name: "Sample: Superstore Sales Dashboard",
-    url: "https://public.tableau.com/views/Superstore_24/Overview",
-    description: "Interactive Tableau Public example - demonstrates filtering, parameters, and actions",
-  },
-  {
-    name: "Sample: World Indicators",
-    url: "https://public.tableau.com/views/WorldIndicators/GDPpercapita",
-    description: "Example dashboard showing global economic indicators and trends",
-  },
-  {
-    name: "Custom: Portfolio Risk Dashboard",
-    url: "",
-    description: "Configure your own portfolio risk analysis dashboard URL",
-  },
-  {
-    name: "Custom: Compliance Metrics Over Time",
-    url: "",
-    description: "Configure your own compliance trends visualization URL",
-  },
-  {
-    name: "Custom: Asset Allocation by Jurisdiction",
-    url: "",
-    description: "Configure your own jurisdiction breakdown visualization URL",
-  },
-];
+// Uses environment variables for Tableau Server/Cloud URLs when configured
+const getUsefulVisualizations = () => {
+  const serverUrl = process.env.NEXT_PUBLIC_TABLEAU_SERVER_URL;
+  const siteId = process.env.NEXT_PUBLIC_TABLEAU_SITE_ID;
+  const defaultVizUrl = process.env.NEXT_PUBLIC_TABLEAU_DEFAULT_URL;
+  
+  // Build Tableau Server URLs if configured
+  const buildServerUrl = (workbook: string, view: string) => {
+    if (!serverUrl) return "";
+    const baseUrl = serverUrl.replace(/\/$/, "");
+    const sitePath = siteId ? `/site/${siteId}` : "";
+    return `${baseUrl}${sitePath}/views/${workbook}/${view}`;
+  };
+
+  return [
+    {
+      name: "Sample: Superstore Sales Dashboard",
+      url: "https://public.tableau.com/views/Superstore_24/Overview",
+      description: "Interactive Tableau Public example - demonstrates filtering, parameters, and actions",
+    },
+    {
+      name: "Sample: World Indicators",
+      url: "https://public.tableau.com/views/WorldIndicators/GDPpercapita",
+      description: "Example dashboard showing global economic indicators and trends",
+    },
+    {
+      name: "Default Visualization",
+      url: defaultVizUrl || "",
+      description: defaultVizUrl ? "Configured default visualization from environment" : "Set NEXT_PUBLIC_TABLEAU_DEFAULT_URL to configure",
+    },
+    {
+      name: "Portfolio Risk Dashboard",
+      url: buildServerUrl("PortfolioRisk", "Dashboard") || "",
+      description: serverUrl ? "Portfolio risk analysis dashboard from Tableau Server" : "Configure NEXT_PUBLIC_TABLEAU_SERVER_URL to enable",
+    },
+    {
+      name: "Compliance Metrics Over Time",
+      url: buildServerUrl("ComplianceMetrics", "Trends") || "",
+      description: serverUrl ? "Compliance trends visualization from Tableau Server" : "Configure NEXT_PUBLIC_TABLEAU_SERVER_URL to enable",
+    },
+    {
+      name: "Asset Allocation by Jurisdiction",
+      url: buildServerUrl("AssetAllocation", "Jurisdiction") || "",
+      description: serverUrl ? "Jurisdiction breakdown visualization from Tableau Server" : "Configure NEXT_PUBLIC_TABLEAU_SERVER_URL to enable",
+    },
+  ];
+};
 
 export default function TableauViz({
   src,
@@ -91,6 +110,9 @@ export default function TableauViz({
 }: TableauVizProps) {
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [jwtToken, setJwtToken] = useState<string | null>(null);
+  const [isLoadingToken, setIsLoadingToken] = useState(false);
+  
   // Default to a useful sample visualization if no URL is provided
   const defaultUrl =
     src ||
@@ -99,12 +121,52 @@ export default function TableauViz({
   
   const [configSrc, setConfigSrc] = useState(defaultUrl);
   
+  // Get useful visualizations (re-evaluated on each render to get latest env vars)
+  const USEFUL_VISUALIZATIONS = getUsefulVisualizations();
+  
   // Update configSrc when src prop changes
   useEffect(() => {
     if (src) {
       setConfigSrc(src);
     }
   }, [src]);
+
+  // Load JWT token if Connected App is enabled and we're using a Tableau Server URL
+  useEffect(() => {
+    const loadJwtToken = async () => {
+      // Only load token if using Connected App and URL is from Tableau Server
+      const useConnectedApp = process.env.NEXT_PUBLIC_TABLEAU_USE_CONNECTED_APP === "true";
+      const isServerUrl = configSrc && !configSrc.includes("public.tableau.com");
+      
+      if (useConnectedApp && isServerUrl && !jwtToken) {
+        setIsLoadingToken(true);
+        try {
+          const response = await fetch("/api/tableau/token", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              username: "user", // In production, get from auth system
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setJwtToken(data.token);
+          } else {
+            console.warn("Failed to load JWT token:", await response.text());
+          }
+        } catch (error) {
+          console.error("Error loading JWT token:", error);
+        } finally {
+          setIsLoadingToken(false);
+        }
+      }
+    };
+
+    loadJwtToken();
+  }, [configSrc, jwtToken]);
   const [configWidth, setConfigWidth] = useState(width);
   const [configHeight, setConfigHeight] = useState(height);
   const [configDevice, setConfigDevice] = useState<"desktop" | "phone" | "tablet">(device);
@@ -266,17 +328,26 @@ export default function TableauViz({
           </CardHeader>
           <CardContent className="p-0">
             <div className="w-full overflow-hidden rounded-b-lg">
-              <tableau-viz
-                ref={vizRef}
-                src={configSrc}
-                width={configWidth}
-                height={configHeight}
-                device={configDevice}
-                toolbar={configToolbar}
-                hide-tabs={configHideTabs}
-                hide-toolbar={configHideToolbar}
-                style={{ display: "block", width: "100%" }}
-              />
+              {isLoadingToken ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center space-y-2">
+                    <RefreshCw className="w-8 h-8 animate-spin mx-auto text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">Authenticating with Tableau...</p>
+                  </div>
+                </div>
+              ) : (
+                <tableau-viz
+                  ref={vizRef}
+                  src={jwtToken ? `${configSrc}?embed_token=${jwtToken}` : configSrc}
+                  width={configWidth}
+                  height={configHeight}
+                  device={configDevice}
+                  toolbar={configToolbar}
+                  hide-tabs={configHideTabs}
+                  hide-toolbar={configHideToolbar}
+                  style={{ display: "block", width: "100%" }}
+                />
+              )}
             </div>
           </CardContent>
         </Card>
@@ -300,15 +371,16 @@ export default function TableauViz({
                 id="tableau-preset"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 onChange={(e) => {
-                  const selected = USEFUL_VISUALIZATIONS.find((v) => v.name === e.target.value);
+                  const selected = getUsefulVisualizations().find((v) => v.name === e.target.value);
                   if (selected && selected.url) {
                     setConfigSrc(selected.url);
+                    setJwtToken(null); // Reset token when URL changes
                   }
                 }}
                 defaultValue=""
               >
                 <option value="">-- Select a pre-configured visualization --</option>
-                {USEFUL_VISUALIZATIONS.map((viz) => (
+                {getUsefulVisualizations().map((viz) => (
                   <option key={viz.name} value={viz.name} disabled={!viz.url}>
                     {viz.name} - {viz.description}
                   </option>

@@ -113,8 +113,11 @@ export const HistoricalDataProvider: React.FC<React.PropsWithChildren> = ({
     }
   }, [holdings, recordSnapshot, recordTrendPoint]);
 
-  // Start periodic collection
+  // Start periodic collection and initialize store (loads from localStorage)
   useEffect(() => {
+    // Initialize the store (loads persisted data from localStorage)
+    historicalDataStore.start();
+
     // Record initial snapshot
     recordSnapshot();
     recordTrendPoint();
@@ -135,6 +138,8 @@ export const HistoricalDataProvider: React.FC<React.PropsWithChildren> = ({
       if (trendIntervalRef.current) {
         clearInterval(trendIntervalRef.current);
       }
+      // Stop store and save data before unmounting
+      historicalDataStore.stop();
     };
   }, [recordSnapshot, recordTrendPoint]);
 

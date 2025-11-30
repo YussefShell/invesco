@@ -29,13 +29,24 @@ class HistoricalDataStore {
   private readonly SNAPSHOT_INTERVAL_MS = 60000; // Take snapshots every 60 seconds
   private readonly TREND_INTERVAL_MS = 300000; // Create trend points every 5 minutes
 
+  // localStorage keys
+  private readonly STORAGE_KEY_SNAPSHOTS = "historical_data_snapshots";
+  private readonly STORAGE_KEY_BREACH_EVENTS = "historical_data_breach_events";
+  private readonly STORAGE_KEY_AUDIT_ENTRIES = "historical_data_audit_entries";
+  private readonly STORAGE_KEY_TREND_POINTS = "historical_data_trend_points";
+
   private snapshotIntervalId: NodeJS.Timeout | null = null;
   private trendIntervalId: NodeJS.Timeout | null = null;
+  private saveIntervalId: NodeJS.Timeout | null = null;
+  private isInitialized = false;
 
   /**
    * Initialize the historical data store and start periodic snapshots
    */
   start(): void {
+    // Load persisted data from localStorage
+    this.loadFromStorage();
+
     // Start periodic holding snapshots
     this.snapshotIntervalId = setInterval(() => {
       // This will be called by external components with current holdings
@@ -45,6 +56,13 @@ class HistoricalDataStore {
     this.trendIntervalId = setInterval(() => {
       // This will be called by external components with current state
     }, this.TREND_INTERVAL_MS);
+
+    // Auto-save to localStorage every 30 seconds
+    this.saveIntervalId = setInterval(() => {
+      this.saveToStorage();
+    }, 30000);
+
+    this.isInitialized = true;
   }
 
   /**
@@ -58,6 +76,108 @@ class HistoricalDataStore {
     if (this.trendIntervalId) {
       clearInterval(this.trendIntervalId);
       this.trendIntervalId = null;
+    }
+    if (this.saveIntervalId) {
+      clearInterval(this.saveIntervalId);
+      this.saveIntervalId = null;
+    }
+    // Save data before stopping
+    this.saveToStorage();
+  }
+
+  /**
+   * Save all data to localStorage (client-side persistence)
+   */
+  private saveToStorage(): void {
+    if (typeof window === "undefined") return; // Server-side: skip
+
+    try {
+      // Save each data type separately to avoid localStorage size limits
+      localStorage.setItem(
+        this.STORAGE_KEY_SNAPSHOTS,
+        JSON.stringify(this.holdingSnapshots.slice(-this.MAX_SNAPSHOTS))
+      );
+      localStorage.setItem(
+        this.STORAGE_KEY_BREACH_EVENTS,
+        JSON.stringify(this.breachEvents.slice(-this.MAX_BREACH_EVENTS))
+      );
+      localStorage.setItem(
+        this.STORAGE_KEY_AUDIT_ENTRIES,
+        JSON.stringify(this.auditLogEntries.slice(-this.MAX_AUDIT_ENTRIES))
+      );
+      localStorage.setItem(
+        this.STORAGE_KEY_TREND_POINTS,
+        JSON.stringify(this.trendDataPoints.slice(-this.MAX_TREND_POINTS))
+      );
+    } catch (error) {
+      // Handle localStorage quota exceeded or other errors
+      console.warn("Failed to save historical data to localStorage:", error);
+      // Try to clear old data and retry with smaller dataset
+      try {
+        const halfSnapshots = this.holdingSnapshots.slice(-Math.floor(this.MAX_SNAPSHOTS / 2));
+        const halfBreachEvents = this.breachEvents.slice(-Math.floor(this.MAX_BREACH_EVENTS / 2));
+        const halfAuditEntries = this.auditLogEntries.slice(-Math.floor(this.MAX_AUDIT_ENTRIES / 2));
+        const halfTrendPoints = this.trendDataPoints.slice(-Math.floor(this.MAX_TREND_POINTS / 2));
+
+        localStorage.setItem(this.STORAGE_KEY_SNAPSHOTS, JSON.stringify(halfSnapshots));
+        localStorage.setItem(this.STORAGE_KEY_BREACH_EVENTS, JSON.stringify(halfBreachEvents));
+        localStorage.setItem(this.STORAGE_KEY_AUDIT_ENTRIES, JSON.stringify(halfAuditEntries));
+        localStorage.setItem(this.STORAGE_KEY_TREND_POINTS, JSON.stringify(halfTrendPoints));
+      } catch (retryError) {
+        console.error("Failed to save historical data even after reducing size:", retryError);
+      }
+    }
+  }
+
+  /**
+   * Load persisted data from localStorage (client-side only)
+   */
+  private loadFromStorage(): void {
+    if (typeof window === "undefined") return; // Server-side: skip
+
+    try {
+      // Load snapshots
+      const savedSnapshots = localStorage.getItem(this.STORAGE_KEY_SNAPSHOTS);
+      if (savedSnapshots) {
+        this.holdingSnapshots = JSON.parse(savedSnapshots) as HistoricalHoldingSnapshot[];
+      }
+
+      // Load breach events
+      const savedBreachEvents = localStorage.getItem(this.STORAGE_KEY_BREACH_EVENTS);
+      if (savedBreachEvents) {
+        this.breachEvents = JSON.parse(savedBreachEvents) as BreachEvent[];
+      }
+
+      // Load audit log entries
+      const savedAuditEntries = localStorage.getItem(this.STORAGE_KEY_AUDIT_ENTRIES);
+      if (savedAuditEntries) {
+        this.auditLogEntries = JSON.parse(savedAuditEntries) as AuditLogEntry[];
+      }
+
+      // Load trend data points
+      const savedTrendPoints = localStorage.getItem(this.STORAGE_KEY_TREND_POINTS);
+      if (savedTrendPoints) {
+        this.trendDataPoints = JSON.parse(savedTrendPoints) as TrendDataPoint[];
+      }
+    } catch (error) {
+      console.warn("Failed to load historical data from localStorage:", error);
+      // Clear corrupted data
+      this.clearStorage();
+    }
+  }
+
+  /**
+   * Clear all persisted data from localStorage
+   */
+  private clearStorage(): void {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.removeItem(this.STORAGE_KEY_SNAPSHOTS);
+      localStorage.removeItem(this.STORAGE_KEY_BREACH_EVENTS);
+      localStorage.removeItem(this.STORAGE_KEY_AUDIT_ENTRIES);
+      localStorage.removeItem(this.STORAGE_KEY_TREND_POINTS);
+    } catch (error) {
+      console.error("Failed to clear localStorage:", error);
     }
   }
 
@@ -102,6 +222,11 @@ class HistoricalDataStore {
     if (this.holdingSnapshots.length > this.MAX_SNAPSHOTS) {
       this.holdingSnapshots = this.holdingSnapshots.slice(-this.MAX_SNAPSHOTS);
     }
+
+    // Auto-save to localStorage if initialized
+    if (this.isInitialized) {
+      this.saveToStorage();
+    }
   }
 
   /**
@@ -119,6 +244,11 @@ class HistoricalDataStore {
     // Trim to max size (keep most recent)
     if (this.breachEvents.length > this.MAX_BREACH_EVENTS) {
       this.breachEvents = this.breachEvents.slice(-this.MAX_BREACH_EVENTS);
+    }
+
+    // Auto-save to localStorage if initialized
+    if (this.isInitialized) {
+      this.saveToStorage();
     }
 
     return breachEvent;
@@ -151,6 +281,11 @@ class HistoricalDataStore {
       this.auditLogEntries = this.auditLogEntries.slice(-this.MAX_AUDIT_ENTRIES);
     }
 
+    // Auto-save to localStorage if initialized
+    if (this.isInitialized) {
+      this.saveToStorage();
+    }
+
     return entry;
   }
 
@@ -168,6 +303,11 @@ class HistoricalDataStore {
     // Trim to max size (keep most recent)
     if (this.trendDataPoints.length > this.MAX_TREND_POINTS) {
       this.trendDataPoints = this.trendDataPoints.slice(-this.MAX_TREND_POINTS);
+    }
+
+    // Auto-save to localStorage if initialized
+    if (this.isInitialized) {
+      this.saveToStorage();
     }
 
     return point;
@@ -368,6 +508,7 @@ class HistoricalDataStore {
     this.breachEvents = [];
     this.auditLogEntries = [];
     this.trendDataPoints = [];
+    this.clearStorage();
   }
 
   /**
