@@ -6,7 +6,6 @@
 
 import { NextResponse } from "next/server";
 import { getDatabaseConfig } from "@/lib/db/client";
-import { getSqlClient } from "@/lib/db/init-server";
 
 async function getSqlClient() {
   const config = getDatabaseConfig();
