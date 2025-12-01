@@ -5,7 +5,6 @@
  * Migrations are run in order and tracked in schema_migrations table.
  */
 
-import { sql } from "@vercel/postgres";
 import { getDatabaseConfig } from "../client";
 
 export interface Migration {
