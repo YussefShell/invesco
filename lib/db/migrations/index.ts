@@ -195,11 +195,15 @@ export async function runMigrations(sql: any): Promise<void> {
     `;
 
     // Get applied migrations
+    // Handle both postgres.js and @vercel/postgres result formats
     const applied = await sql`
       SELECT version FROM schema_migrations ORDER BY version DESC
     `;
+    
+    // postgres.js returns array directly, @vercel/postgres returns { rows: [...] }
+    const rows = Array.isArray(applied) ? applied : (applied.rows || []);
     const appliedVersions = new Set(
-      applied.rows.map((r: any) => r.version)
+      rows.map((r: any) => r.version)
     );
 
     // Run pending migrations
