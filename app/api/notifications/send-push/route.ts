@@ -213,7 +213,8 @@ async function sendViaAPNS(
     // The build warning is expected and can be ignored if you're not using APNS
     let apn: any;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // Use dynamic require for optional dependency
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       apn = require("@parse/node-apn");
     } catch (requireError) {
       return NextResponse.json(
