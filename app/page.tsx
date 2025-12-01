@@ -343,11 +343,11 @@ export default function Dashboard() {
                   <div>
                     <p className="text-xs font-semibold text-foreground mb-1">Production Implementation:</p>
                     <p className="text-xs text-muted-foreground mb-2">
-                      In a production deployment at Invesco, buying velocity would be calculated from actual trading data stored in Invesco's database:
+                      In a production deployment at Invesco, buying velocity would be calculated from actual trading data stored in Invesco&apos;s database:
                     </p>
                     <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-1.5 ml-2">
                       <li>
-                        <strong>Order Flow Data:</strong> Query Invesco's order management system (OMS) database to retrieve executed buy orders for each security over a rolling time window (e.g., last 1 hour, 4 hours, or 24 hours)
+                        <strong>Order Flow Data:</strong> Query Invesco&apos;s order management system (OMS) database to retrieve executed buy orders for each security over a rolling time window (e.g., last 1 hour, 4 hours, or 24 hours)
                       </li>
                       <li>
                         <strong>Aggregation:</strong> Sum the total shares purchased across all Invesco funds/entities for each ticker within the time window
@@ -356,14 +356,14 @@ export default function Dashboard() {
                         <strong>Velocity Calculation:</strong> Divide total shares purchased by the time window duration to get shares per hour
                       </li>
                       <li>
-                        <strong>Real-Time Updates:</strong> Continuously poll or subscribe to order execution events from Invesco's trading systems to update buying velocity in real-time
+                        <strong>Real-Time Updates:</strong> Continuously poll or subscribe to order execution events from Invesco&apos;s trading systems to update buying velocity in real-time
                       </li>
                       <li>
                         <strong>Database Query Example:</strong> 
                         <code className="block mt-1 px-2 py-1 rounded bg-muted/50 text-[10px] font-mono">
                           SELECT ticker, SUM(shares_executed) / hours_elapsed AS buying_velocity<br/>
                           FROM order_executions<br/>
-                          WHERE side = 'BUY' AND execution_time {'>'} NOW() - INTERVAL '1 hour'<br/>
+                          WHERE side = &apos;BUY&apos; AND execution_time {'>'} NOW() - INTERVAL &apos;1 hour&apos;<br/>
                           GROUP BY ticker
                         </code>
                       </li>
@@ -371,7 +371,7 @@ export default function Dashboard() {
                   </div>
                   <div className="mt-3 pt-3 border-t border-border">
                     <p className="text-[10px] text-muted-foreground">
-                      <strong>Note:</strong> This demo platform uses simulated buying velocity values to demonstrate the regulatory risk monitoring capabilities. In production, these values would be sourced directly from Invesco's trading and portfolio management databases.
+                      <strong>Note:</strong> This demo platform uses simulated buying velocity values to demonstrate the regulatory risk monitoring capabilities. In production, these values would be sourced directly from Invesco&apos;s trading and portfolio management databases.
                     </p>
                   </div>
                 </div>
