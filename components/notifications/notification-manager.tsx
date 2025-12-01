@@ -714,13 +714,14 @@ function AlertRuleDialog({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button 
+              type="button"
               variant="outline" 
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={loading}>
+            <Button type="button" onClick={handleSave} disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -899,13 +900,14 @@ function RecipientDialog({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button
+              type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={loading}>
+            <Button type="button" onClick={handleSave} disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

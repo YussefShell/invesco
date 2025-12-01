@@ -20,7 +20,7 @@ interface AuditLogContextValue {
   appendLog: (line: string) => void;
 }
 
-const AuditLogContext = createContext<AuditLogContextValue | undefined>(
+export const AuditLogContext = createContext<AuditLogContextValue | undefined>(
   undefined
 );
 

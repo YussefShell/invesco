@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkDatabaseHealth } from "@/lib/db/client";
+import { checkDatabaseHealth, getDatabaseConfig } from "@/lib/db/client";
 
 /**
  * Health check endpoint for monitoring server status
@@ -7,7 +7,9 @@ import { checkDatabaseHealth } from "@/lib/db/client";
  */
 export async function GET() {
   try {
+    const dbConfig = getDatabaseConfig();
     const dbHealth = await checkDatabaseHealth();
+    const usingFallback = !dbConfig.enabled || !dbHealth;
     
     return NextResponse.json(
       {
@@ -16,8 +18,10 @@ export async function GET() {
         uptime: process.uptime(),
         environment: process.env.NODE_ENV || "development",
         database: {
-          enabled: dbHealth,
-          status: dbHealth ? "connected" : "disabled",
+          enabled: dbConfig.enabled,
+          status: dbHealth ? "connected" : (dbConfig.enabled ? "error" : "disabled"),
+          usingFallback,
+          storage: usingFallback ? "localStorage" : "database",
         },
       },
       { status: 200 }
@@ -28,6 +32,12 @@ export async function GET() {
         status: "error",
         error: error instanceof Error ? error.message : "Unknown error",
         timestamp: new Date().toISOString(),
+        database: {
+          enabled: false,
+          status: "error",
+          usingFallback: true,
+          storage: "localStorage",
+        },
       },
       { status: 500 }
     );

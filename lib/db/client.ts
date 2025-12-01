@@ -1,22 +1,12 @@
 /**
- * Database Client for Vercel Postgres
+ * Database Client for Vercel Postgres and Supabase
  * 
  * This module provides a database client that works with:
  * - Vercel Postgres (production)
+ * - Supabase (using postgres.js for better compatibility)
  * - Local PostgreSQL (development with connection string)
  * - Falls back gracefully if database is not configured
  */
-
-// Safe import that handles missing database configuration
-let sql: any = null;
-
-try {
-  const postgres = require("@vercel/postgres");
-  sql = postgres.sql;
-} catch (error) {
-  console.warn("[DB] @vercel/postgres not available, database features will be disabled");
-  // sql will remain null and functions will check before use
-}
 
 export interface DatabaseConfig {
   enabled: boolean;
@@ -26,17 +16,13 @@ export interface DatabaseConfig {
 /**
  * Get database configuration from environment variables
  */
-export function getDatabaseConfig(): DatabaseConfig {
-  // Vercel Postgres provides connection string automatically
-  // For local dev, use POSTGRES_URL or DATABASE_URL
+function getDatabaseConfig(): DatabaseConfig {
   const connectionString = 
     process.env.POSTGRES_URL || 
     process.env.DATABASE_URL ||
     process.env.POSTGRES_PRISMA_URL ||
     process.env.POSTGRES_URL_NON_POOLING;
 
-  // Check if database is enabled via environment variable
-  // Default to false if no connection string is available
   const explicitlyEnabled = process.env.DATABASE_ENABLED === "true";
   const explicitlyDisabled = process.env.DATABASE_ENABLED === "false";
   const enabled = explicitlyDisabled ? false : (explicitlyEnabled || !!connectionString);
@@ -47,9 +33,80 @@ export function getDatabaseConfig(): DatabaseConfig {
   };
 }
 
+// Export the function for use in other modules
+export { getDatabaseConfig };
+
+// Safe import that handles missing database configuration
+let sql: any = null;
+let postgresClient: any = null;
+
+// Only initialize on server-side (Node.js environment)
+if (typeof window === 'undefined') {
+  const config = getDatabaseConfig();
+  
+  // Use postgres.js for Supabase (better compatibility)
+  // Use @vercel/postgres only if no connection string is provided (Vercel auto-config)
+  if (config.enabled && config.connectionString) {
+    // Use postgres.js for Supabase/external PostgreSQL
+    try {
+      const postgres = require("postgres");
+      // Configure for Supabase - SSL is required
+      const postgresOptions: any = {
+        max: 10,
+        idle_timeout: 20,
+        connect_timeout: 10,
+      };
+      
+      // Supabase requires SSL
+      if (config.connectionString.includes('supabase.co')) {
+        postgresOptions.ssl = { rejectUnauthorized: false };
+      }
+      
+      postgresClient = postgres(config.connectionString, postgresOptions);
+      sql = postgresClient;
+      
+      // Test connection immediately
+      if (process.env.NODE_ENV === 'development') {
+        const maskedConn = config.connectionString.replace(/:([^:@]+)@/, ':***@');
+        console.log(`[DB] Using postgres.js (Supabase compatible): ${maskedConn.substring(0, 60)}...`);
+        // Test connection
+        postgresClient`SELECT 1`.then(() => {
+          console.log(`[DB] ✅ Connection test successful`);
+        }).catch((err: any) => {
+          console.error(`[DB] ❌ Connection test failed:`, err?.message);
+        });
+      }
+    } catch (postgresError: any) {
+      console.warn("[DB] Failed to initialize postgres.js:", postgresError?.message);
+      // Fall back to @vercel/postgres
+      try {
+        const vercelPostgres = require("@vercel/postgres");
+        sql = vercelPostgres.sql;
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[DB] Falling back to @vercel/postgres`);
+        }
+      } catch (vercelError) {
+        console.warn("[DB] Neither postgres.js nor @vercel/postgres available");
+      }
+    }
+  } else {
+    // No connection string - try @vercel/postgres (for Vercel deployments)
+    try {
+      const vercelPostgres = require("@vercel/postgres");
+      sql = vercelPostgres.sql;
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[DB] Using @vercel/postgres (Vercel auto-config)`);
+      }
+    } catch (error) {
+      console.warn("[DB] @vercel/postgres not available");
+    }
+  }
+}
+
 /**
- * Initialize database tables
+ * Initialize database tables using migration system
  * This should be called once on application startup
+ * @deprecated Use ensureDatabaseInitialized from init-server.ts instead
  */
 export async function initializeDatabase(): Promise<boolean> {
   try {
@@ -65,140 +122,13 @@ export async function initializeDatabase(): Promise<boolean> {
       return false;
     }
 
-    console.log("[DB] Initializing database tables...");
+    console.log("[DB] Initializing database using migration system...");
 
-    // Create FIX messages table
-    await sql`
-      CREATE TABLE IF NOT EXISTS fix_messages (
-        id SERIAL PRIMARY KEY,
-        raw_message TEXT NOT NULL,
-        msg_type VARCHAR(10),
-        symbol VARCHAR(20),
-        quantity DECIMAL(18, 2),
-        price DECIMAL(18, 6),
-        side VARCHAR(10),
-        checksum_valid BOOLEAN DEFAULT false,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
+    // Use migration system
+    const { runMigrations } = await import("./migrations");
+    await runMigrations(sql);
 
-    // Create indexes for FIX messages (ignore errors if they already exist)
-    try {
-      await sql`CREATE INDEX idx_fix_symbol ON fix_messages(symbol)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_fix_created_at ON fix_messages(created_at)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_fix_msg_type ON fix_messages(msg_type)`;
-    } catch {}
-
-    // Create audit log entries table
-    await sql`
-      CREATE TABLE IF NOT EXISTS audit_log_entries (
-        id SERIAL PRIMARY KEY,
-        entry_text TEXT NOT NULL,
-        system_id VARCHAR(100),
-        level VARCHAR(50),
-        message TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-
-    // Create indexes for audit log (ignore errors if they already exist)
-    try {
-      await sql`CREATE INDEX idx_audit_system_id ON audit_log_entries(system_id)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_audit_level ON audit_log_entries(level)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_audit_created_at ON audit_log_entries(created_at)`;
-    } catch {}
-
-    // Create notifications table
-    await sql`
-      CREATE TABLE IF NOT EXISTS notifications (
-        id SERIAL PRIMARY KEY,
-        recipient_id VARCHAR(100) NOT NULL,
-        recipient_name VARCHAR(255),
-        channel VARCHAR(50) NOT NULL,
-        title VARCHAR(255),
-        message TEXT,
-        severity VARCHAR(50),
-        status VARCHAR(50) DEFAULT 'sent',
-        sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-
-    // Create indexes for notifications (ignore errors if they already exist)
-    try {
-      await sql`CREATE INDEX idx_notifications_recipient ON notifications(recipient_id)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_notifications_channel ON notifications(channel)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_notifications_sent_at ON notifications(sent_at)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_notifications_status ON notifications(status)`;
-    } catch {}
-
-    // Create breach events table
-    await sql`
-      CREATE TABLE IF NOT EXISTS breach_events (
-        id SERIAL PRIMARY KEY,
-        ticker VARCHAR(20) NOT NULL,
-        jurisdiction VARCHAR(50) NOT NULL,
-        ownership_percent DECIMAL(10, 4) NOT NULL,
-        threshold DECIMAL(10, 4) NOT NULL,
-        status VARCHAR(50) NOT NULL,
-        detected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        resolved_at TIMESTAMP WITH TIME ZONE
-      )
-    `;
-
-    // Create indexes for breach events (ignore errors if they already exist)
-    try {
-      await sql`CREATE INDEX idx_breach_ticker ON breach_events(ticker)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_breach_jurisdiction ON breach_events(jurisdiction)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_breach_status ON breach_events(status)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_breach_detected_at ON breach_events(detected_at)`;
-    } catch {}
-
-    // Create holding snapshots table
-    await sql`
-      CREATE TABLE IF NOT EXISTS holding_snapshots (
-        id SERIAL PRIMARY KEY,
-        ticker VARCHAR(20) NOT NULL,
-        jurisdiction VARCHAR(50) NOT NULL,
-        shares_owned DECIMAL(18, 2) NOT NULL,
-        total_shares_outstanding DECIMAL(18, 2) NOT NULL,
-        ownership_percent DECIMAL(10, 4) NOT NULL,
-        buying_velocity DECIMAL(18, 2) DEFAULT 0,
-        snapshot_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-
-    // Create indexes for holding snapshots (ignore errors if they already exist)
-    try {
-      await sql`CREATE INDEX idx_snapshots_ticker ON holding_snapshots(ticker)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_snapshots_jurisdiction ON holding_snapshots(jurisdiction)`;
-    } catch {}
-    try {
-      await sql`CREATE INDEX idx_snapshots_time ON holding_snapshots(snapshot_time)`;
-    } catch {}
-
-    console.log("[DB] ✅ Database tables initialized successfully");
+    console.log("[DB] ✅ Database initialized successfully");
     return true;
   } catch (error) {
     console.error("[DB] ❌ Failed to initialize database:", error);
@@ -219,11 +149,25 @@ export async function checkDatabaseHealth(): Promise<boolean> {
     if (!sql) {
       return false;
     }
-    await sql`SELECT 1`;
+    // Test connection with a simple query
+    await sql`SELECT 1 as test`;
     return true;
-  } catch (error) {
-    console.error("[DB] Database health check failed:", error);
+  } catch (error: any) {
+    // Log detailed error in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error("[DB] Database health check failed:", error?.message || error);
+      if (error?.message?.includes('ECONNREFUSED')) {
+        console.error("[DB] Connection refused - check if database is accessible and connection string is correct");
+      } else if (error?.message?.includes('timeout')) {
+        console.error("[DB] Connection timeout - check network/firewall settings");
+      } else if (error?.message?.includes('password')) {
+        console.error("[DB] Authentication failed - check password in connection string");
+      } else if (error?.message?.includes('ENOTFOUND') || error?.message?.includes('getaddrinfo')) {
+        console.error("[DB] DNS resolution failed - check connection string hostname");
+      }
+    } else {
+      console.error("[DB] Database health check failed");
+    }
     return false;
   }
 }
-

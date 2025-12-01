@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getTableauUsername, setTableauUsername } from "@/lib/tableau-user";
 
 // TypeScript declarations for the tableau-viz web component
 declare global {
@@ -112,6 +113,13 @@ export default function TableauViz({
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [jwtToken, setJwtToken] = useState<string | null>(null);
   const [isLoadingToken, setIsLoadingToken] = useState(false);
+  const [tableauUsername, setTableauUsernameState] = useState<string>(() => {
+    // Initialize from localStorage or environment variable
+    if (typeof window !== 'undefined') {
+      return getTableauUsername();
+    }
+    return process.env.NEXT_PUBLIC_TABLEAU_DEFAULT_USERNAME || 'guest';
+  });
   
   // Default to a useful sample visualization if no URL is provided
   const defaultUrl =
@@ -141,13 +149,16 @@ export default function TableauViz({
       if (useConnectedApp && isServerUrl && !jwtToken) {
         setIsLoadingToken(true);
         try {
+          // Get username from helper function (safe fallbacks)
+          const username = getTableauUsername();
+          
           const response = await fetch("/api/tableau/token", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              username: "user", // In production, get from auth system
+              username: username,
             }),
           });
 
@@ -166,7 +177,39 @@ export default function TableauViz({
     };
 
     loadJwtToken();
-  }, [configSrc, jwtToken]);
+  }, [configSrc, jwtToken, tableauUsername]);
+
+  // Automatic token refresh (55 minutes before expiry)
+  useEffect(() => {
+    if (!jwtToken) return;
+
+    // Refresh token 5 minutes before expiry (55 minutes after creation)
+    const refreshTimer = setTimeout(async () => {
+      try {
+        const username = getTableauUsername();
+        const response = await fetch("/api/tableau/token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            username: username,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setJwtToken(data.token);
+        } else {
+          console.warn("Failed to refresh JWT token:", await response.text());
+        }
+      } catch (error) {
+        console.error("Error refreshing JWT token:", error);
+      }
+    }, 55 * 60 * 1000); // 55 minutes
+
+    return () => clearTimeout(refreshTimer);
+  }, [jwtToken]);
   const [configWidth, setConfigWidth] = useState(width);
   const [configHeight, setConfigHeight] = useState(height);
   const [configDevice, setConfigDevice] = useState<"desktop" | "phone" | "tablet">(device);
@@ -374,7 +417,7 @@ export default function TableauViz({
                   const selected = getUsefulVisualizations().find((v) => v.name === e.target.value);
                   if (selected && selected.url) {
                     setConfigSrc(selected.url);
-                    setJwtToken(null); // Reset token when URL changes
+                    setJwtToken(null); // Reset token when URL changes to force refresh
                   }
                 }}
                 defaultValue=""
@@ -397,13 +440,39 @@ export default function TableauViz({
                 id="tableau-url"
                 placeholder="https://public.tableau.com/views/YourWorkbook/YourView"
                 value={configSrc}
-                onChange={(e) => setConfigSrc(e.target.value)}
+                onChange={(e) => {
+                  setConfigSrc(e.target.value);
+                  // Reset token when URL changes to force refresh
+                  setJwtToken(null);
+                }}
               />
               <p className="text-xs text-muted-foreground">
                 Enter the full URL to your Tableau visualization. For Tableau Server/Cloud, ensure
                 proper authentication is configured.
               </p>
             </div>
+
+            {process.env.NEXT_PUBLIC_TABLEAU_USE_CONNECTED_APP === "true" && (
+              <div className="space-y-2">
+                <Label htmlFor="tableau-username">Tableau Username (Optional)</Label>
+                <Input
+                  id="tableau-username"
+                  placeholder={getTableauUsername()}
+                  value={tableauUsername}
+                  onChange={(e) => {
+                    const username = e.target.value.trim() || process.env.NEXT_PUBLIC_TABLEAU_DEFAULT_USERNAME || 'guest';
+                    setTableauUsernameState(username);
+                    setTableauUsername(username); // Save to localStorage
+                    // Reset token to refresh with new username
+                    setJwtToken(null);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Username for Tableau Server authentication. If left empty, uses default from environment variable or &quot;guest&quot;.
+                  This is stored in your browser and persists across sessions.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

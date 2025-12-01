@@ -113,10 +113,12 @@ export const HistoricalDataProvider: React.FC<React.PropsWithChildren> = ({
     }
   }, [holdings, recordSnapshot, recordTrendPoint]);
 
-  // Start periodic collection and initialize store (loads from localStorage)
+  // Start periodic collection and initialize store (loads from database/localStorage)
   useEffect(() => {
-    // Initialize the store (loads persisted data from localStorage)
-    historicalDataStore.start();
+    // Initialize the store (loads persisted data from database or localStorage)
+    historicalDataStore.start().catch((error) => {
+      console.error("[HistoricalDataContext] Failed to start store:", error);
+    });
 
     // Record initial snapshot
     recordSnapshot();

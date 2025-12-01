@@ -48,6 +48,23 @@ interface FilterState {
   dataFreshness: DataFreshnessFilter;
 }
 
+// Helper function to format data source name
+function formatDataSourceName(source: string | undefined | null): string {
+  if (!source) return "Not Available";
+  switch (source) {
+    case 'yahoo_finance': return 'Yahoo Finance';
+    case 'finnhub': return 'Finnhub';
+    case 'sec_api': return 'SEC API';
+    case 'alpha_vantage': return 'Alpha Vantage';
+    case 'financial_modeling_prep': return 'FMP';
+    case 'polygon': return 'Polygon';
+    case 'mock_fallback': return 'Mock Data';
+    case 'cache': return 'Cached';
+    case 'unknown': return 'Unknown';
+    default: return source.toUpperCase();
+  }
+}
+
 function PredictiveBreachTable({
   onRowClick,
 }: PredictiveBreachTableProps) {
@@ -290,7 +307,7 @@ const PredictiveRow = forwardRef<HTMLTableRowElement, PredictiveRowProps>(functi
     setIsClient(true);
   }, []);
 
-  // Fetch real-time price from Finnhub API for accurate breach analysis
+  // Fetch real-time price from Yahoo Finance API (primary) for accurate breach analysis
   // This ensures we always use real market prices regardless of data source setting
   useEffect(() => {
     let isMounted = true;
@@ -819,8 +836,18 @@ const PredictiveRow = forwardRef<HTMLTableRowElement, PredictiveRowProps>(functi
             </span>
             <span 
               className={`w-1.5 h-1.5 rounded-full ${finnhubPrice !== null ? "bg-green-500 animate-pulse" : holding.price ? "bg-blue-500" : "bg-yellow-500 animate-pulse"}`} 
-              title={finnhubPrice !== null ? "Real-time price from Finnhub.io" : holding.price ? "Price from data provider" : "Loading price..."} 
+              title={finnhubPrice !== null ? "Real-time price from Yahoo Finance" : holding.price ? (holding.priceSource ? `Price from ${holding.priceSource}` : "Price from data provider") : "Loading price..."} 
             />
+            {holding.priceSource && (
+              <span 
+                className="text-[9px] px-1 py-0.5 rounded bg-purple-500/10 text-purple-600 border border-purple-500/30 font-medium ml-1"
+                title={`Price source: ${holding.priceSource}`}
+              >
+                {holding.priceSource === 'finnhub' ? 'Finnhub' :
+                 holding.priceSource === 'yahoo_finance' ? 'Yahoo' :
+                 holding.priceSource.toUpperCase()}
+              </span>
+            )}
           </motion.div>
         ) : (
           <div className="flex items-center justify-end gap-1">
@@ -1007,7 +1034,16 @@ const PredictiveRow = forwardRef<HTMLTableRowElement, PredictiveRowProps>(functi
                   Hidden: +{formatNumber(trueExposure.totalPercentage - trueExposure.directPercentage)}%
                 </div>
                 <div className="mt-2 pt-2 border-t border-border/50 text-xs text-muted-foreground">
-                  <span className="font-semibold">Shares Outstanding:</span> {trueExposure.totalSharesOutstanding.toLocaleString("en-US", { maximumFractionDigits: 0 })} shares
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold">Shares Outstanding:</span>
+                    <span>{trueExposure.totalSharesOutstanding.toLocaleString("en-US", { maximumFractionDigits: 0 })} shares</span>
+                    <span 
+                      className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 border border-blue-500/30 font-medium"
+                      title={`Data source: ${formatDataSourceName(holding.sharesOutstandingSource)}`}
+                    >
+                      Source: {formatDataSourceName(holding.sharesOutstandingSource)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </motion.div>

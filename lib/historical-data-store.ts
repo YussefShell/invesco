@@ -14,6 +14,7 @@ import type {
   Jurisdiction,
 } from "@/types";
 import { calculateDeltaAdjustedExposure } from "@/lib/calculation-utils";
+import { getDatabaseConfig } from "@/lib/db/client";
 
 class HistoricalDataStore {
   private holdingSnapshots: HistoricalHoldingSnapshot[] = [];
@@ -39,13 +40,26 @@ class HistoricalDataStore {
   private trendIntervalId: NodeJS.Timeout | null = null;
   private saveIntervalId: NodeJS.Timeout | null = null;
   private isInitialized = false;
+  private dbEnabled: boolean = false;
 
   /**
    * Initialize the historical data store and start periodic snapshots
    */
-  start(): void {
-    // Load persisted data from localStorage
-    this.loadFromStorage();
+  async start(): Promise<void> {
+    // Check if database is enabled
+    this.dbEnabled = getDatabaseConfig().enabled;
+
+    // Load recent data (24-48 hours) from database if enabled, otherwise from localStorage
+    if (this.dbEnabled) {
+      try {
+        await this.loadRecentDataFromDatabase();
+      } catch (error) {
+        console.error("[HistoricalDataStore] Failed to load from database, falling back to localStorage:", error);
+        this.loadFromStorage();
+      }
+    } else {
+      this.loadFromStorage();
+    }
 
     // Start periodic holding snapshots
     this.snapshotIntervalId = setInterval(() => {
@@ -57,12 +71,54 @@ class HistoricalDataStore {
       // This will be called by external components with current state
     }, this.TREND_INTERVAL_MS);
 
-    // Auto-save to localStorage every 30 seconds
+    // Auto-save to localStorage every 30 seconds (as fallback)
     this.saveIntervalId = setInterval(() => {
       this.saveToStorage();
     }, 30000);
 
     this.isInitialized = true;
+  }
+
+  /**
+   * Load recent data (24-48 hours) from database
+   */
+  private async loadRecentDataFromDatabase(): Promise<void> {
+    if (!this.dbEnabled) return;
+
+    try {
+      const { queryAuditLogEntries, queryHoldingSnapshots, queryBreachEvents } = await import("@/lib/db/persistence-service");
+      
+      // Load last 48 hours of data
+      const hoursAgo = 48;
+      const startDate = new Date();
+      startDate.setHours(startDate.getHours() - hoursAgo);
+      const startDateISO = startDate.toISOString();
+
+      // Load recent audit logs (last 100 entries)
+      const auditLogs = await queryAuditLogEntries(100);
+      this.auditLogEntries = auditLogs.map(log => ({
+        ...log,
+        metadata: {},
+      }));
+
+      // Load recent holding snapshots (last 48 hours, limit 500)
+      const snapshots = await queryHoldingSnapshots(undefined, undefined, 500, startDateISO);
+      this.holdingSnapshots = snapshots.map(s => ({
+        ...s,
+        price: undefined, // Not stored in DB
+        regulatoryStatus: "safe" as RegulatoryStatus, // Would need to calculate
+        threshold: 0, // Would need to look up
+      }));
+
+      // Load recent breach events (last 48 hours, limit 300)
+      const breaches = await queryBreachEvents(undefined, undefined, 300, startDateISO);
+      this.breachEvents = breaches;
+
+      console.log(`[HistoricalDataStore] Loaded ${this.auditLogEntries.length} audit logs, ${this.holdingSnapshots.length} snapshots, ${this.breachEvents.length} breach events from database`);
+    } catch (error) {
+      console.error("[HistoricalDataStore] Error loading from database:", error);
+      throw error;
+    }
   }
 
   /**
@@ -216,6 +272,7 @@ class HistoricalDataStore {
       };
     });
 
+    // Store in memory (for immediate access)
     this.holdingSnapshots.push(...snapshots);
 
     // Trim to max size (keep most recent)
@@ -223,9 +280,31 @@ class HistoricalDataStore {
       this.holdingSnapshots = this.holdingSnapshots.slice(-this.MAX_SNAPSHOTS);
     }
 
-    // Auto-save to localStorage if initialized
-    if (this.isInitialized) {
-      this.saveToStorage();
+    // Persist to database (primary storage)
+    if (this.dbEnabled) {
+      import("@/lib/db/persistence-service").then(({ persistHoldingSnapshot }) => {
+        snapshots.forEach(snapshot => {
+          persistHoldingSnapshot(
+            snapshot.ticker,
+            snapshot.jurisdiction,
+            snapshot.sharesOwned,
+            snapshot.totalSharesOutstanding,
+            snapshot.ownershipPercent,
+            snapshot.buyingVelocity
+          ).catch((error) => {
+            console.error("[HistoricalDataStore] Failed to persist snapshot:", error);
+            // Fall back to localStorage
+            if (this.isInitialized) {
+              this.saveToStorage();
+            }
+          });
+        });
+      });
+    } else {
+      // Fallback to localStorage
+      if (this.isInitialized) {
+        this.saveToStorage();
+      }
     }
   }
 
@@ -246,16 +325,22 @@ class HistoricalDataStore {
       this.breachEvents = this.breachEvents.slice(-this.MAX_BREACH_EVENTS);
     }
 
-    // Persist to database (async, don't await to avoid blocking)
-    import("@/lib/db/persistence-service").then(({ persistBreachEvent }) => {
-      persistBreachEvent(breachEvent).catch((error) => {
-        console.error("[HistoricalDataStore] Failed to persist breach event:", error);
+    // Persist to database (primary storage)
+    if (this.dbEnabled) {
+      import("@/lib/db/persistence-service").then(({ persistBreachEvent }) => {
+        persistBreachEvent(breachEvent).catch((error) => {
+          console.error("[HistoricalDataStore] Failed to persist breach event:", error);
+          // Fall back to localStorage
+          if (this.isInitialized) {
+            this.saveToStorage();
+          }
+        });
       });
-    });
-
-    // Auto-save to localStorage if initialized
-    if (this.isInitialized) {
-      this.saveToStorage();
+    } else {
+      // Fallback to localStorage
+      if (this.isInitialized) {
+        this.saveToStorage();
+      }
     }
 
     return breachEvent;
@@ -288,16 +373,22 @@ class HistoricalDataStore {
       this.auditLogEntries = this.auditLogEntries.slice(-this.MAX_AUDIT_ENTRIES);
     }
 
-    // Persist to database (async, don't await to avoid blocking)
-    import("@/lib/db/persistence-service").then(({ persistAuditLogEntry }) => {
-      persistAuditLogEntry(rawLine, systemId, level || "INFO", message).catch((error) => {
-        console.error("[HistoricalDataStore] Failed to persist audit log entry:", error);
+    // Persist to database (primary storage)
+    if (this.dbEnabled) {
+      import("@/lib/db/persistence-service").then(({ persistAuditLogEntry }) => {
+        persistAuditLogEntry(rawLine, systemId, level || "INFO", message).catch((error) => {
+          console.error("[HistoricalDataStore] Failed to persist audit log entry:", error);
+          // Fall back to localStorage
+          if (this.isInitialized) {
+            this.saveToStorage();
+          }
+        });
       });
-    });
-
-    // Auto-save to localStorage if initialized
-    if (this.isInitialized) {
-      this.saveToStorage();
+    } else {
+      // Fallback to localStorage
+      if (this.isInitialized) {
+        this.saveToStorage();
+      }
     }
 
     return entry;
@@ -329,10 +420,51 @@ class HistoricalDataStore {
 
   /**
    * Query historical holding snapshots
+   * Checks in-memory cache first, then queries database for older data if needed
    */
-  queryHoldingSnapshots(query: HistoricalDataQuery = {}): HistoricalHoldingSnapshot[] {
+  async queryHoldingSnapshots(query: HistoricalDataQuery = {}): Promise<HistoricalHoldingSnapshot[]> {
     let results = [...this.holdingSnapshots];
 
+    // If querying older data (more than 48 hours ago) and database is enabled, query from DB
+    if (this.dbEnabled && query.startTime) {
+      const queryDate = new Date(query.startTime);
+      const hoursAgo = 48;
+      const cutoffDate = new Date();
+      cutoffDate.setHours(cutoffDate.getHours() - hoursAgo);
+
+      if (queryDate < cutoffDate) {
+        try {
+          const { queryHoldingSnapshots } = await import("@/lib/db/persistence-service");
+          const dbResults = await queryHoldingSnapshots(
+            query.ticker,
+            query.jurisdiction,
+            query.limit || 1000,
+            query.startTime,
+            query.endTime
+          );
+          
+          // Merge with in-memory results
+          const dbSnapshots = dbResults.map(s => ({
+            ...s,
+            price: undefined,
+            regulatoryStatus: "safe" as RegulatoryStatus,
+            threshold: 0,
+          }));
+          
+          // Combine and deduplicate by id
+          const combined = [...results, ...dbSnapshots];
+          const unique = Array.from(
+            new Map(combined.map(item => [item.id, item])).values()
+          );
+          results = unique;
+        } catch (error) {
+          console.error("[HistoricalDataStore] Failed to query database:", error);
+          // Continue with in-memory results only
+        }
+      }
+    }
+
+    // Apply filters
     if (query.startTime) {
       results = results.filter((s) => s.timestamp >= query.startTime!);
     }

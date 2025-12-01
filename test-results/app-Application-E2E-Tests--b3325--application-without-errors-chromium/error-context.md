@@ -1,0 +1,1186 @@
+# Page snapshot
+
+```yaml
+- generic:
+  - generic:
+    - banner:
+      - generic:
+        - generic:
+          - generic:
+            - img
+            - generic:
+              - heading [level=1]: Global Regulatory Risk Engine
+              - paragraph: Mission-Critical Dashboard for Global Head of Risk
+              - generic:
+                - generic: "Active Data Source: Internal Simulation (Mock)"
+                - generic: Real-Time Prices Active
+                - generic: ✓ Connected
+          - generic:
+            - generic:
+              - generic:
+                - generic: "Data:"
+                - combobox:
+                  - generic: Mock (Simulated)
+                  - img
+              - generic: "Simulated data for development. Buying velocity: Simulated mock data."
+            - generic:
+              - generic:
+                - generic: "View:"
+                - button: Fund Level
+                - generic: "|"
+                - button: Group Level
+              - generic: "Fund Level: Individual fund exposures shown separately"
+            - button:
+              - img
+            - button:
+              - img
+              - text: Run Simulation
+            - generic:
+              - paragraph: Last Updated
+              - paragraph: 3:46:03 PM
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - img
+            - generic:
+              - generic:
+                - img
+                - heading [level=3]: "Buying Velocity: Simulated Mock Data"
+              - generic:
+                - generic:
+                  - paragraph: "Current Status:"
+                  - paragraph:
+                    - text: All buying velocity values shown in this platform are
+                    - strong: simulated mock data
+                    - text: for demonstration purposes only.
+                - generic:
+                  - paragraph: "Production Implementation:"
+                  - paragraph: "In a production deployment at Invesco, buying velocity would be calculated from actual trading data stored in Invesco's database:"
+                  - list:
+                    - listitem:
+                      - strong: "Order Flow Data:"
+                      - text: Query Invesco's order management system (OMS) database to retrieve executed buy orders for each security over a rolling time window (e.g., last 1 hour, 4 hours, or 24 hours)
+                    - listitem:
+                      - strong: "Aggregation:"
+                      - text: Sum the total shares purchased across all Invesco funds/entities for each ticker within the time window
+                    - listitem:
+                      - strong: "Velocity Calculation:"
+                      - text: Divide total shares purchased by the time window duration to get shares per hour
+                    - listitem:
+                      - strong: "Real-Time Updates:"
+                      - text: Continuously poll or subscribe to order execution events from Invesco's trading systems to update buying velocity in real-time
+                    - listitem:
+                      - strong: "Database Query Example:"
+                      - code: SELECT ticker, SUM(shares_executed) / hours_elapsed AS buying_velocity FROM order_executions WHERE side = 'BUY' AND execution_time > NOW() - INTERVAL '1 hour' GROUP BY ticker
+                - generic:
+                  - paragraph:
+                    - strong: "Note:"
+                    - text: This demo platform uses simulated buying velocity values to demonstrate the regulatory risk monitoring capabilities. In production, these values would be sourced directly from Invesco's trading and portfolio management databases.
+    - main:
+      - alert:
+        - generic:
+          - generic:
+            - img
+            - generic:
+              - heading [level=5]:
+                - img
+                - text: Using Local Storage Fallback
+              - generic:
+                - text: Database is not available. Data is being stored in browser local storage.
+                - generic: Database persistence is disabled. Historical data will be lost on page refresh.
+          - button:
+            - img
+      - generic:
+        - generic:
+          - generic:
+            - heading [level=2]: Regulatory Risk Heatmap
+            - generic:
+              - generic:
+                - generic: Active Breach
+              - generic:
+                - generic: Drift Warning (<0.5% from threshold)
+              - generic:
+                - generic: Safe
+          - generic:
+            - img:
+              - generic:
+                - generic: USA
+              - generic:
+                - generic: UK
+              - generic:
+                - generic: Hong Kong
+              - generic:
+                - generic: APAC
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - heading [level=3]:
+                  - img
+                  - text: Advanced Analytics Dashboard
+                - paragraph: Comprehensive risk metrics and performance indicators
+              - generic:
+                - generic:
+                  - text: Time Range
+                  - combobox:
+                    - generic: Last 7d
+                    - img
+                - generic:
+                  - text: Jurisdiction
+                  - combobox:
+                    - generic: All
+                    - img
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic: Total Holdings
+                  - generic:
+                    - img
+                - generic: "200"
+              - generic:
+                - generic:
+                  - generic: Active Breaches
+                  - generic:
+                    - img
+                - generic: "85"
+                - generic: 42.5% of holdings
+                - generic:
+                  - img
+                  - generic: Increasing
+              - generic:
+                - generic:
+                  - generic: Warnings
+                  - generic:
+                    - img
+                - generic: "54"
+                - generic: 27.0% of holdings
+                - generic:
+                  - img
+                  - generic: Increasing
+              - generic:
+                - generic:
+                  - generic: Safe Positions
+                  - generic:
+                    - img
+                - generic: "61"
+                - generic: 30.5%
+            - generic:
+              - generic:
+                - generic:
+                  - generic: Avg Ownership %
+                  - generic:
+                    - img
+                - generic: 4.23%
+              - generic:
+                - generic:
+                  - generic: Avg Buying Velocity
+                  - generic:
+                    - img
+                - generic: 10,298.47
+                - generic: shares/hr
+              - generic:
+                - generic:
+                  - generic: Recent Events
+                  - generic:
+                    - img
+                - generic: "12"
+                - generic: in 7d
+            - generic:
+              - heading [level=3]: Breakdown by Jurisdiction
+              - generic:
+                - generic:
+                  - generic: USA
+                  - generic:
+                    - generic:
+                      - generic: "Holdings:"
+                      - generic: "54"
+                    - generic:
+                      - generic: "Breaches:"
+                      - generic: "16"
+                    - generic:
+                      - generic: "Warnings:"
+                      - generic: "17"
+                    - generic:
+                      - generic: "Avg Ownership:"
+                      - generic: 4.27%
+                - generic:
+                  - generic: UK
+                  - generic:
+                    - generic:
+                      - generic: "Holdings:"
+                      - generic: "49"
+                    - generic:
+                      - generic: "Breaches:"
+                      - generic: "41"
+                    - generic:
+                      - generic: "Warnings:"
+                      - generic: "5"
+                    - generic:
+                      - generic: "Avg Ownership:"
+                      - generic: 4.12%
+                - generic:
+                  - generic: Hong Kong
+                  - generic:
+                    - generic:
+                      - generic: "Holdings:"
+                      - generic: "48"
+                    - generic:
+                      - generic: "Breaches:"
+                      - generic: "13"
+                    - generic:
+                      - generic: "Warnings:"
+                      - generic: "15"
+                    - generic:
+                      - generic: "Avg Ownership:"
+                      - generic: 4.21%
+                - generic:
+                  - generic: APAC
+                  - generic:
+                    - generic:
+                      - generic: "Holdings:"
+                      - generic: "49"
+                    - generic:
+                      - generic: "Breaches:"
+                      - generic: "15"
+                    - generic:
+                      - generic: "Warnings:"
+                      - generic: "17"
+                    - generic:
+                      - generic: "Avg Ownership:"
+                      - generic: 4.31%
+            - generic:
+              - heading [level=3]: Top Risk Holdings
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: "1"
+                    - generic:
+                      - generic: NVDA
+                      - generic: 5.26% ownership
+                  - generic:
+                    - generic:
+                      - generic: Velocity
+                      - generic: 12,500/hr
+                    - generic:
+                      - generic: Time to Breach
+                      - generic: "-5.1h"
+                - generic:
+                  - generic:
+                    - generic: "2"
+                    - generic:
+                      - generic: MSFT
+                      - generic: 5.22% ownership
+                  - generic:
+                    - generic:
+                      - generic: Velocity
+                      - generic: 11,200/hr
+                    - generic:
+                      - generic: Time to Breach
+                      - generic: "-14.2h"
+                - generic:
+                  - generic:
+                    - generic: "3"
+                    - generic:
+                      - generic: NVDA-35
+                      - generic: 5.20% ownership
+                  - generic:
+                    - generic:
+                      - generic: Velocity
+                      - generic: 7,634/hr
+                    - generic:
+                      - generic: Time to Breach
+                      - generic: "-19.3h"
+                - generic:
+                  - generic:
+                    - generic: "4"
+                    - generic:
+                      - generic: NVDA-144
+                      - generic: 5.20% ownership
+                  - generic:
+                    - generic:
+                      - generic: Velocity
+                      - generic: 16,959/hr
+                    - generic:
+                      - generic: Time to Breach
+                      - generic: "-7.0h"
+                - generic:
+                  - generic:
+                    - generic: "5"
+                    - generic:
+                      - generic: NVDA-177
+                      - generic: 5.20% ownership
+                  - generic:
+                    - generic:
+                      - generic: Velocity
+                      - generic: 3,764/hr
+                    - generic:
+                      - generic: Time to Breach
+                      - generic: "-17.9h"
+                - generic:
+                  - generic:
+                    - generic: "6"
+                    - generic:
+                      - generic: NVDA-68
+                      - generic: 5.20% ownership
+                  - generic:
+                    - generic:
+                      - generic: Velocity
+                      - generic: 8,658/hr
+                    - generic:
+                      - generic: Time to Breach
+                      - generic: "-5.6h"
+                - generic:
+                  - generic:
+                    - generic: "7"
+                    - generic:
+                      - generic: NVDA-79
+                      - generic: 5.20% ownership
+                  - generic:
+                    - generic:
+                      - generic: Velocity
+                      - generic: 19,004/hr
+                    - generic:
+                      - generic: Time to Breach
+                      - generic: "-10.0h"
+                - generic:
+                  - generic:
+                    - generic: "8"
+                    - generic:
+                      - generic: NVDA-90
+                      - generic: 5.20% ownership
+                  - generic:
+                    - generic:
+                      - generic: Velocity
+                      - generic: 18,559/hr
+                    - generic:
+                      - generic: Time to Breach
+                      - generic: "-94.5h"
+                - generic:
+                  - generic:
+                    - generic: "9"
+                    - generic:
+                      - generic: NVDA-133
+                      - generic: 5.20% ownership
+                  - generic:
+                    - generic:
+                      - generic: Velocity
+                      - generic: 5,035/hr
+                    - generic:
+                      - generic: Time to Breach
+                      - generic: "-8.3h"
+                - generic:
+                  - generic:
+                    - generic: "10"
+                    - generic:
+                      - generic: NVDA-188
+                      - generic: 5.20% ownership
+                  - generic:
+                    - generic:
+                      - generic: Velocity
+                      - generic: 8,586/hr
+                    - generic:
+                      - generic: Time to Breach
+                      - generic: "-8.5h"
+            - generic:
+              - generic:
+                - heading [level=3]: Risk Distribution
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: Breaches
+                      - generic: "85"
+                  - generic:
+                    - generic:
+                      - generic: Warnings
+                      - generic: "54"
+                  - generic:
+                    - generic:
+                      - generic: Safe
+                      - generic: "61"
+              - generic:
+                - heading [level=3]: Risk by Jurisdiction
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: USA
+                      - generic: 61.1% risk
+                  - generic:
+                    - generic:
+                      - generic: UK
+                      - generic: 93.9% risk
+                  - generic:
+                    - generic:
+                      - generic: Hong Kong
+                      - generic: 58.3% risk
+                  - generic:
+                    - generic:
+                      - generic: APAC
+                      - generic: 65.3% risk
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - heading [level=3]: Real-Time Tableau Analytics Dashboard
+                - paragraph:
+                  - text: Interactive dashboard powered by your live portfolio data
+                  - generic: "(Last refreshed: 3:45:41 PM)"
+              - generic:
+                - button:
+                  - img
+                  - text: Refresh
+                - button:
+                  - img
+                  - text: Export CSV
+                - button:
+                  - img
+                  - text: Data API
+                - button:
+                  - img
+          - generic:
+            - generic:
+              - paragraph: No Tableau dashboard configured. Click the settings button to configure your dashboard.
+              - button: Configure Tableau Dashboard
+              - generic:
+                - heading [level=3]: "Quick Setup Guide:"
+                - list:
+                  - listitem:
+                    - text: "Create a Tableau workbook connecting to:"
+                    - code: /api/tableau/data?format=json
+                  - listitem: Publish the workbook to Tableau Server/Cloud or Tableau Public
+                  - listitem: Enter the published workbook URL in the configuration dialog
+                  - listitem: The dashboard will automatically update when your portfolio data changes
+      - generic:
+        - generic:
+          - generic:
+            - heading [level=3]: Regulatory Risk Analytics Dashboard
+            - paragraph: Comprehensive risk analysis and compliance monitoring powered by your platform data
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - heading [level=3]: Total Holdings
+                  - generic:
+                    - generic: "200"
+                    - paragraph: Active positions monitored
+                - generic:
+                  - generic:
+                    - heading [level=3]:
+                      - img
+                      - text: Active Breaches
+                  - generic:
+                    - generic: "85"
+                    - paragraph: Require immediate action
+                - generic:
+                  - generic:
+                    - heading [level=3]:
+                      - img
+                      - text: Warnings
+                  - generic:
+                    - generic: "54"
+                    - paragraph: Approaching thresholds
+                - generic:
+                  - generic:
+                    - heading [level=3]:
+                      - img
+                      - text: Safe Positions
+                  - generic:
+                    - generic: "61"
+                    - paragraph: Within compliance limits
+              - generic:
+                - generic:
+                  - generic:
+                    - heading [level=3]:
+                      - img
+                      - text: Risk Distribution by Jurisdiction
+                    - paragraph: Breakdown of compliance status across regulatory regions
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic: USA
+                          - generic: 54 holdings
+                        - generic:
+                          - generic: "16"
+                          - generic: "17"
+                          - generic: "21"
+                        - generic:
+                          - generic:
+                            - generic: 16 Breaches
+                          - generic:
+                            - generic: 17 Warnings
+                          - generic:
+                            - generic: 21 Safe
+                      - generic:
+                        - generic:
+                          - generic: UK
+                          - generic: 49 holdings
+                        - generic:
+                          - generic: "41"
+                          - generic: "5"
+                          - generic: "3"
+                        - generic:
+                          - generic:
+                            - generic: 41 Breaches
+                          - generic:
+                            - generic: 5 Warnings
+                          - generic:
+                            - generic: 3 Safe
+                      - generic:
+                        - generic:
+                          - generic: Hong Kong
+                          - generic: 48 holdings
+                        - generic:
+                          - generic: "13"
+                          - generic: "15"
+                          - generic: "20"
+                        - generic:
+                          - generic:
+                            - generic: 13 Breaches
+                          - generic:
+                            - generic: 15 Warnings
+                          - generic:
+                            - generic: 20 Safe
+                      - generic:
+                        - generic:
+                          - generic: APAC
+                          - generic: 49 holdings
+                        - generic:
+                          - generic: "15"
+                          - generic: "17"
+                          - generic: "17"
+                        - generic:
+                          - generic:
+                            - generic: 15 Breaches
+                          - generic:
+                            - generic: 17 Warnings
+                          - generic:
+                            - generic: 17 Safe
+                - generic:
+                  - generic:
+                    - heading [level=3]:
+                      - img
+                      - text: Risk Status Overview
+                    - paragraph: Visual breakdown of portfolio compliance status
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - generic:
+                            - generic:
+                              - generic: "200"
+                              - generic: Total Holdings
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Active Breaches
+                          - generic: "85"
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Warnings
+                          - generic: "54"
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Safe
+                          - generic: "61"
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: "Avg. Time to Breach:"
+                          - generic: 83.6 days
+              - generic:
+                - generic:
+                  - heading [level=3]: Top Risk Positions
+                  - paragraph: Holdings requiring immediate attention or monitoring
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic: NVDA
+                          - generic: BREACH
+                          - generic: USA
+                        - generic: NVIDIA Corp • 10.46% ownership
+                      - generic:
+                        - generic: Active Breach
+                        - generic: Beneficial Ownership Reporting
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic: RIO
+                          - generic: BREACH
+                          - generic: UK
+                        - generic: Rio Tinto Group • 3.10% ownership
+                      - generic:
+                        - generic: Active Breach
+                        - generic: Major Shareholding Notification
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic: MSFT
+                          - generic: BREACH
+                          - generic: USA
+                        - generic: Microsoft Corporation • 5.22% ownership
+                      - generic:
+                        - generic: Active Breach
+                        - generic: Passive Investment Reporting
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic: NVDA-12
+                          - generic: BREACH
+                          - generic: APAC
+                        - generic: NVIDIA Corp Synthetic 12 • 5.20% ownership
+                      - generic:
+                        - generic: Active Breach
+                        - generic: Foreign Investment and Exchange Law
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic: NVDA-13
+                          - generic: BREACH
+                          - generic: USA
+                        - generic: NVIDIA Corp Synthetic 13 • 5.20% ownership
+                      - generic:
+                        - generic: Active Breach
+                        - generic: Beneficial Ownership Reporting
+      - generic:
+        - generic:
+          - generic:
+            - heading [level=3]: Projected Breach Time Calculation
+            - paragraph: Understanding how the system predicts regulatory threshold breaches
+          - generic:
+            - generic:
+              - generic:
+                - heading [level=3]: Calculation Method
+                - paragraph: The projected breach time estimates when a position will exceed its regulatory threshold based on current buying velocity. The calculation uses delta-adjusted exposure, which includes both direct share ownership and derivative positions (options).
+                - generic:
+                  - generic:
+                    - generic: "1."
+                    - generic: "Total Exposure = Shares Owned + (Sum of: Contracts × 100 × Delta)"
+                  - generic:
+                    - generic: "2."
+                    - generic: Threshold Shares = (Threshold / 100) × Total Shares Outstanding
+                  - generic:
+                    - generic: "3."
+                    - generic: Shares to Breach = Threshold Shares - Total Exposure
+                  - generic:
+                    - generic: "4."
+                    - generic: Time to Breach (hours) = Shares to Breach / Buying Velocity (shares/hour)
+              - generic:
+                - heading [level=3]: Status Determination
+                - generic:
+                  - generic:
+                    - generic: ●
+                    - generic: Breach:Current position already exceeds the regulatory threshold
+                  - generic:
+                    - generic: ●
+                    - generic: Warning:Position is at or above 90% of threshold (within warning zone)
+                  - generic:
+                    - generic: ●
+                    - generic: Safe:Position is below 90% of threshold (outside warning zone), OR buying velocity is zero or negative
+              - generic:
+                - heading [level=3]: Edge Cases
+                - list:
+                  - listitem: If the position is already at or above the threshold, the status is immediately set to "Breach" with no time calculation
+                  - listitem: If buying velocity is zero or negative, the position is marked as "Safe" since no breach is projected (no calculation performed)
+                  - listitem: If the position is below 90% of the threshold, it is marked as "Safe" regardless of buying velocity
+              - generic:
+                - paragraph:
+                  - strong: "Note:"
+                  - text: The calculation uses actual total shares outstanding for each security. Delta-adjusted exposure accounts for derivative positions (options) where each contract represents 100 shares adjusted by the option's delta value, providing institutional-grade accuracy for regulatory compliance.
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - heading [level=2]: Predictive Breach Analysis
+            - generic:
+              - generic:
+                - generic:
+                  - button:
+                    - img
+                    - text: Advanced Filters
+                    - img
+            - generic: Showing 200 of 200 holdings
+            - generic:
+              - table:
+                - rowgroup:
+                  - row:
+                    - columnheader: Issuer
+                    - columnheader: ISIN
+                    - columnheader: Jurisdiction
+                    - columnheader: Price
+                    - columnheader: Current Position %
+                    - columnheader: Buying Velocity
+                    - columnheader: Projected Breach Time
+                    - columnheader: Regulatory Filing
+                    - columnheader: Action
+              - generic:
+                - generic:
+                  - table:
+                    - rowgroup:
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: NVDA
+                            - generic: NVIDIA Corp
+                            - button:
+                              - img
+                            - generic: ✓ Recon
+                        - cell: US67066G1040
+                        - cell: USA
+                        - cell:
+                          - generic:
+                            - generic: $179.92
+                            - generic: Yahoo
+                        - cell:
+                          - generic:
+                            - generic: 5.26%
+                            - generic: Direct only
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 12,500 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Active Breach
+                            - generic:
+                              - button: Acknowledge
+                              - button: Dismiss
+                        - cell:
+                          - generic:
+                            - generic: Schedule 13D
+                            - generic: "Deadline: 08 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: NVDA
+                            - generic: NVIDIA Corp
+                            - button:
+                              - img
+                        - cell: US67066G1040
+                        - cell: USA
+                        - cell:
+                          - generic:
+                            - generic: $179.92
+                            - generic: Yahoo
+                        - cell:
+                          - generic:
+                            - generic: 5.20%
+                            - generic: Direct only
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 8,000 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Active Breach
+                            - generic:
+                              - button: Acknowledge
+                              - button: Dismiss
+                        - cell:
+                          - generic:
+                            - generic: Schedule 13D
+                            - generic: "Deadline: 08 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: 0700.HK
+                            - generic: Tencent Holdings Ltd
+                        - cell: KYG875721634
+                        - cell: Hong Kong
+                        - cell:
+                          - generic:
+                            - generic: HK$619.50
+                            - generic: Yahoo
+                        - cell:
+                          - generic:
+                            - generic: 4.80%
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 8,500 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Breach in 93.8d
+                        - cell:
+                          - generic:
+                            - generic: Form 2 (Corporate Substantial Shareholder)
+                            - generic: "Deadline: 04 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: RIO
+                            - generic: Rio Tinto Group
+                        - cell: GB0007188757
+                        - cell: UK
+                        - cell:
+                          - generic:
+                            - generic: £5,465.00
+                            - generic: Yahoo
+                        - cell:
+                          - generic:
+                            - generic: 3.10%
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 3,200 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Active Breach
+                            - generic:
+                              - button: Acknowledge
+                              - button: Dismiss
+                        - cell:
+                          - generic:
+                            - generic: Form TR-1
+                            - generic: "Deadline: 03 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: AAPL
+                            - generic: Apple Inc
+                            - button:
+                              - img
+                            - generic: ✓ Recon
+                        - cell: US0378331005
+                        - cell: USA
+                        - cell:
+                          - generic:
+                            - generic: $283.10
+                        - cell:
+                          - generic:
+                            - generic: 4.62%
+                            - generic: Direct only
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 15,200 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Breach in 162.4d
+                        - cell:
+                          - generic:
+                            - generic: Schedule 13D
+                            - generic: "Deadline: 08 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: HSBA
+                            - generic: HSBC Holdings plc
+                        - cell: GB0005405286
+                        - cell: UK
+                        - cell:
+                          - generic:
+                            - generic: £1,079.60
+                        - cell:
+                          - generic:
+                            - generic: 2.70%
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 1,800 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Breach in 1333.3d
+                        - cell:
+                          - generic:
+                            - generic: Form TR-1
+                            - generic: "Deadline: 03 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: BABA
+                            - generic: Alibaba Group Holding Ltd
+                        - cell: US01609W1027
+                        - cell: USA
+                        - cell:
+                          - generic:
+                            - generic: $164.26
+                        - cell:
+                          - generic:
+                            - generic: 4.95%
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 9,800 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Breach in 4.5d
+                        - cell:
+                          - generic:
+                            - generic: Schedule 13D
+                            - generic: "Deadline: 08 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: 005930.KS
+                            - generic: Samsung Electronics Co Ltd
+                        - cell: KR7005930003
+                        - cell: APAC
+                        - cell:
+                          - generic:
+                            - generic: $100,800
+                        - cell:
+                          - generic:
+                            - generic: 4.20%
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 4,200 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Safe
+                        - cell:
+                          - generic:
+                            - generic: APAC Regulatory Disclosure
+                            - generic: "Deadline: 08 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: MSFT
+                            - generic: Microsoft Corporation
+                            - button:
+                              - img
+                            - generic: ⚠ Recon
+                        - cell: US5949181045
+                        - cell: USA
+                        - cell:
+                          - generic:
+                            - generic: $486.74
+                        - cell:
+                          - generic:
+                            - generic: 5.22%
+                            - generic: Direct only
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 11,200 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Active Breach
+                            - generic:
+                              - button: Acknowledge
+                              - button: Dismiss
+                        - cell:
+                          - generic:
+                            - generic: Schedule 13D
+                            - generic: "Deadline: 08 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: SPY
+                            - generic: SPDR S&P 500 ETF Trust
+                        - cell: US78463V1070
+                        - cell: USA
+                        - cell:
+                          - generic:
+                            - generic: $680.27
+                        - cell:
+                          - generic:
+                            - generic: 4.72%
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 1,500 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Breach in 81.7d
+                        - cell:
+                          - generic:
+                            - generic: Schedule 13D
+                            - generic: "Deadline: 08 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: QQQ
+                            - generic: Invesco QQQ Trust
+                        - cell: US46090E1038
+                        - cell: USA
+                        - cell:
+                          - generic:
+                            - generic: $617.17
+                        - cell:
+                          - generic:
+                            - generic: 3.46%
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 2,000 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Safe
+                        - cell:
+                          - generic:
+                            - generic: Schedule 13D
+                            - generic: "Deadline: 08 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: NVDA-12
+                            - generic: NVIDIA Corp Synthetic 12
+                        - cell: SYNTH00000012
+                        - cell: APAC
+                        - cell:
+                          - generic:
+                            - generic: $450.35
+                        - cell:
+                          - generic:
+                            - generic: 5.20%
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 22,989 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Active Breach
+                            - generic:
+                              - button: Acknowledge
+                              - button: Dismiss
+                        - cell:
+                          - generic:
+                            - generic: APAC Regulatory Disclosure
+                            - generic: "Deadline: 08 Dec 2025"
+                        - cell:
+                          - button: View Details
+                      - row:
+                        - cell:
+                          - generic:
+                            - generic: NVDA-13
+                            - generic: NVIDIA Corp Synthetic 13
+                        - cell: SYNTH00000013
+                        - cell: USA
+                        - cell:
+                          - generic:
+                            - generic: $450.01
+                        - cell:
+                          - generic:
+                            - generic: 5.20%
+                        - cell:
+                          - generic:
+                            - generic:
+                              - generic: 8,478 shares/hr
+                              - generic: SIMULATED
+                        - cell:
+                          - generic:
+                            - generic:
+                              - img
+                              - text: Active Breach
+                            - generic:
+                              - button: Acknowledge
+                              - button: Dismiss
+                        - cell:
+                          - generic:
+                            - generic: Schedule 13D
+                            - generic: "Deadline: 08 Dec 2025"
+                        - cell:
+                          - button: View Details
+      - generic:
+        - generic: Component failed to load. Please refresh the page.
+      - generic:
+        - generic: Component failed to load. Please refresh the page.
+      - generic:
+        - generic: Component failed to load. Please refresh the page.
+      - generic:
+        - generic: Component failed to load. Please refresh the page.
+      - generic:
+        - generic: Component failed to load. Please refresh the page.
+      - generic:
+        - generic: Component failed to load. Please refresh the page.
+    - generic: Component failed to load. Please refresh the page.
+    - generic: Component failed to load. Please refresh the page.
+  - alert
+  - dialog "Configure Tableau Dashboard" [ref=e2]:
+    - generic [ref=e3]:
+      - heading "Configure Tableau Dashboard" [level=2] [ref=e4]
+      - paragraph [ref=e5]: Enter the URL of your published Tableau workbook. The dashboard will connect to your live portfolio data.
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - text: Tableau Workbook URL
+        - textbox "Tableau Workbook URL" [active] [ref=e8]:
+          - /placeholder: https://public.tableau.com/views/YourWorkbook/YourView
+        - paragraph [ref=e9]: Enter the full URL to your published Tableau visualization.
+      - generic [ref=e10]:
+        - heading "Data Connection Setup" [level=4] [ref=e11]
+        - paragraph [ref=e12]: "Your Tableau workbook should connect to this API endpoint:"
+        - code [ref=e13]: http://localhost:3000/api/tableau/data?format=json
+        - paragraph [ref=e14]: Use a Web Data Connector or JSON data source in Tableau to connect to this endpoint. The data updates in real-time as your portfolio changes.
+      - generic [ref=e15]:
+        - button "Cancel" [ref=e16] [cursor=pointer]
+        - button "Save Configuration" [disabled]
+    - button "Close" [ref=e17] [cursor=pointer]:
+      - img [ref=e18]
+      - generic [ref=e21]: Close
+  - generic [ref=e24] [cursor=pointer]:
+    - img [ref=e25]
+    - generic [ref=e27]: 1 error
+    - button "Hide Errors" [ref=e28]:
+      - img [ref=e29]
+```

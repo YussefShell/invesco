@@ -23,6 +23,7 @@ import {
 import { useRisk, type AggregationScope } from "@/components/contexts/RiskContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LazyErrorBoundary } from "@/components/lazy-error-boundary";
+import { DatabaseFallbackBanner } from "@/components/database-fallback-banner";
 
 // Safe lazy loader wrapper that handles errors
 const safeLazy = (importFn: () => Promise<any>) => {
@@ -387,6 +388,9 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="flex-1 container mx-auto px-6 py-6 space-y-6">
+        {/* Database Fallback Banner */}
+        <DatabaseFallbackBanner />
+        
         {/* Risk Heatmap */}
         <div>
           <Suspense fallback={<div className="h-64 flex items-center justify-center text-muted-foreground">Loading heatmap...</div>}>
@@ -556,9 +560,11 @@ export default function Dashboard() {
 
         {/* Notification Manager */}
         <div>
-          <Suspense fallback={<div className="h-32 flex items-center justify-center text-muted-foreground">Loading notifications...</div>}>
-            <NotificationManager />
-          </Suspense>
+          <LazyErrorBoundary fallback={<div className="p-4 border border-yellow-500/20 rounded-lg bg-yellow-500/10 text-yellow-500 text-sm">Component failed to load. Please refresh the page.</div>}>
+            <Suspense fallback={<div className="h-32 flex items-center justify-center text-muted-foreground">Loading notifications...</div>}>
+              <NotificationManager />
+            </Suspense>
+          </LazyErrorBoundary>
         </div>
 
         {/* Export Manager */}
@@ -570,9 +576,11 @@ export default function Dashboard() {
       </main>
 
       {/* System Status Footer */}
-      <Suspense fallback={null}>
-        <RegulatoryAuditLog />
-      </Suspense>
+      <LazyErrorBoundary fallback={null}>
+        <Suspense fallback={null}>
+          <RegulatoryAuditLog />
+        </Suspense>
+      </LazyErrorBoundary>
       <Suspense fallback={null}>
         <SystemStatus />
       </Suspense>

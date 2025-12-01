@@ -7,7 +7,21 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "fix-server": "node server/crd-fix-server.js"
+    "fix-server": "node server/crd-fix-server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:build": "jest __tests__/build-verification.test.ts",
+    "test:static": "jest __tests__/static-assets.test.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:prod": "npm run build && npm start & timeout /t 5 /nobreak >nul 2>&1 & set PLAYWRIGHT_PROD_MODE=true && playwright test",
+    "test:e2e:prod:ui": "npm run build && npm start & timeout /t 5 /nobreak >nul 2>&1 & set PLAYWRIGHT_PROD_MODE=true && playwright test --ui",
+    "test:all": "npm run test:build && npm run test:static && npm run test && npm run test:e2e",
+    "test:all:no-e2e": "npm run test:build && npm run test:static && npm run test",
+    "test:ci": "npm run test:build && npm run test:static && npm run test && npm run test:e2e",
+    "test:quick": "npm run test:build && npm run test"
   },
   "dependencies": {
     "@parse/node-apn": "^6.5.0",
@@ -27,6 +41,7 @@
     "lucide-react": "^0.344.0",
     "next": "^14.2.5",
     "pdf-lib": "^1.17.1",
+    "postgres": "^3.4.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-simple-maps": "^3.0.0",
@@ -34,18 +49,28 @@
     "tailwind-merge": "^2.2.2",
     "twilio": "^5.10.6",
     "ws": "^8.18.3",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "yahoo-finance2": "^3.10.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.14.9",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@types/xlsx": "^0.0.35",
     "autoprefixer": "^10.4.19",
+    "babel-jest": "^30.2.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.5",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "playwright": "^1.57.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.5.3"
   }
 }

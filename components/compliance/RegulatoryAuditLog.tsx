@@ -1,9 +1,12 @@
 "use client";
 
-import { useAuditLog } from "@/components/contexts/AuditLogContext";
+import { useContext } from "react";
+import { AuditLogContext } from "@/components/contexts/AuditLogContext";
 
 export default function RegulatoryAuditLog() {
-  const { entries } = useAuditLog();
+  // Use useContext directly to handle missing context gracefully
+  const ctx = useContext(AuditLogContext);
+  const entries = ctx?.entries || [];
 
   return (
     <div className="w-full border-t border-border bg-black/80 text-green-400 font-mono text-xs mt-4">

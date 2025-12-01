@@ -87,10 +87,11 @@ export function EscalationModal({
           </div>
         </div>
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={handleCancel}>
+          <Button type="button" variant="outline" onClick={handleCancel}>
             Cancel
           </Button>
           <Button
+            type="button"
             onClick={handleSubmit}
             disabled={justification.trim().length === 0}
             className="bg-amber-500 hover:bg-amber-600"

@@ -7,16 +7,19 @@ import type {
   AlertRule,
 } from "@/types/notifications";
 import type { Holding } from "@/types";
+import { getDatabaseConfig } from "@/lib/db/client";
 
 export class NotificationService {
   private recipients: Map<string, NotificationRecipient> = new Map();
   private alertRules: Map<string, AlertRule> = new Map();
   private notificationHistory: Notification[] = [];
   private notificationCooldowns: Map<string, number> = new Map(); // ruleId -> lastSentTimestamp
+  private dbEnabled: boolean = false;
 
   constructor() {
     this.initializeDefaultRecipients();
     this.initializeDefaultRules();
+    this.dbEnabled = getDatabaseConfig().enabled;
   }
 
   private initializeDefaultRecipients() {
@@ -514,7 +517,7 @@ Sent at: ${new Date(notification.sentAt).toLocaleString()}
   }
 
   // Get notification history
-  getNotificationHistory(
+  async getNotificationHistory(
     page: number = 1,
     pageSize: number = 50,
     filters?: {
@@ -526,6 +529,75 @@ Sent at: ${new Date(notification.sentAt).toLocaleString()}
       endDate?: string;
     }
   ) {
+    // If database is enabled and querying older data, query from DB
+    if (this.dbEnabled && filters?.startDate) {
+      const queryDate = new Date(filters.startDate);
+      const hoursAgo = 48;
+      const cutoffDate = new Date();
+      cutoffDate.setHours(cutoffDate.getHours() - hoursAgo);
+
+      if (queryDate < cutoffDate) {
+        try {
+          const { queryNotifications } = await import("@/lib/db/persistence-service");
+          const dbNotifications = await queryNotifications(
+            pageSize * page, // Get enough for pagination
+            filters.recipientId,
+            filters.channel,
+            filters.severity,
+            filters.status,
+            filters.startDate,
+            filters.endDate
+          );
+
+          // Merge with in-memory (recent) notifications
+          const combined = [...this.notificationHistory, ...dbNotifications];
+          const unique = Array.from(
+            new Map(combined.map(item => [item.id, item])).values()
+          );
+          
+          // Apply filters
+          let filtered = unique;
+          if (filters) {
+            if (filters.recipientId) {
+              filtered = filtered.filter((n) => n.recipientId === filters.recipientId);
+            }
+            if (filters.channel) {
+              filtered = filtered.filter((n) => n.channel === filters.channel);
+            }
+            if (filters.severity) {
+              filtered = filtered.filter((n) => n.severity === filters.severity);
+            }
+            if (filters.status) {
+              filtered = filtered.filter((n) => n.status === filters.status);
+            }
+            if (filters.startDate) {
+              filtered = filtered.filter((n) => n.sentAt >= filters.startDate!);
+            }
+            if (filters.endDate) {
+              filtered = filtered.filter((n) => n.sentAt <= filters.endDate!);
+            }
+          }
+
+          // Sort by most recent first
+          filtered.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+
+          const start = (page - 1) * pageSize;
+          const end = start + pageSize;
+
+          return {
+            notifications: filtered.slice(start, end),
+            total: filtered.length,
+            page,
+            pageSize,
+          };
+        } catch (error) {
+          console.error("[NotificationService] Failed to query database:", error);
+          // Fall through to in-memory query
+        }
+      }
+    }
+
+    // In-memory query (for recent data or when DB is disabled)
     let filtered = [...this.notificationHistory];
 
     if (filters) {

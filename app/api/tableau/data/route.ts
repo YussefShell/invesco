@@ -8,28 +8,26 @@
  * - GET /api/tableau/data?format=json - Returns JSON data
  * - GET /api/tableau/data?format=csv - Returns CSV data
  * - GET /api/tableau/data?format=json&jurisdiction=USA - Filter by jurisdiction
+ * - POST /api/tableau/data - Updates the cache with current holdings from client
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getPortfolioCache } from "@/lib/portfolio-cache";
+import { calculateDeltaAdjustedExposure } from "@/lib/calculation-utils";
 import { mockPositions, regulatoryRules, getRealisticSharesOutstanding } from "@/lib/mock-data";
 import { getMarketDataGenerator } from "@/lib/market-data-generator";
 import type { Holding, Jurisdiction } from "@/types";
 
 /**
- * Get current holdings data
- * This generates fresh data from mock positions and market data generator
- * In production, this would fetch from a database or real-time data source
+ * Fallback: Generate holdings if cache is empty
+ * This is used when the client hasn't synced data yet
  */
-function getCurrentHoldings(): Holding[] {
+function getFallbackHoldings(): Holding[] {
   const generator = getMarketDataGenerator();
   
   return mockPositions.map((pos) => {
     const assetData = generator.generatePriceUpdate(pos.ticker || "");
-    
-    // Use realistic shares outstanding from mock-data
     const totalSharesOutstanding = getRealisticSharesOutstanding(pos.ticker || "");
-    
-    // Calculate shares owned from current position percentage
     const sharesOwned = (pos.currentPosition / 100) * totalSharesOutstanding;
     
     return {
@@ -49,10 +47,12 @@ function getCurrentHoldings(): Holding[] {
 }
 
 /**
- * Calculate ownership percentage and breach status
+ * Calculate ownership percentage and breach status using delta-adjusted exposure
  */
 function calculateMetrics(holding: Holding) {
-  const ownershipPercent = (holding.sharesOwned / holding.totalSharesOutstanding) * 100;
+  // Use delta-adjusted exposure for institutional-grade accuracy
+  const totalExposure = calculateDeltaAdjustedExposure(holding);
+  const ownershipPercent = (totalExposure / holding.totalSharesOutstanding) * 100;
   const threshold = holding.regulatoryRule.threshold;
   const warningMin = threshold * 0.9;
   
@@ -66,7 +66,7 @@ function calculateMetrics(holding: Holding) {
   let projectedBreachTime: number | null = null;
   if (status === "warning" && holding.buyingVelocity > 0) {
     const thresholdShares = (threshold / 100) * holding.totalSharesOutstanding;
-    const sharesToBreach = thresholdShares - holding.sharesOwned;
+    const sharesToBreach = thresholdShares - totalExposure;
     projectedBreachTime = sharesToBreach / holding.buyingVelocity; // hours
   }
   
@@ -207,13 +207,23 @@ function toTableauCSV(holdings: Holding[], jurisdiction?: Jurisdiction) {
   return [headers.join(","), ...rows.map(row => row.join(","))].join("\n");
 }
 
+/**
+ * GET endpoint - Returns cached holdings or fallback data
+ */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") || "json";
     const jurisdiction = searchParams.get("jurisdiction") as Jurisdiction | null;
     
-    const holdings = getCurrentHoldings();
+    // Try to get cached holdings first
+    const cache = getPortfolioCache();
+    let holdings = cache.getHoldings();
+    
+    // Fallback to generated data if cache is empty or expired
+    if (!holdings) {
+      holdings = getFallbackHoldings();
+    }
     
     if (format === "csv") {
       const csv = toTableauCSV(holdings, jurisdiction || undefined);
@@ -236,6 +246,7 @@ export async function GET(request: Request) {
         jurisdiction: jurisdiction || "all",
         timestamp: new Date().toISOString(),
         format: "json",
+        source: cache.hasData() ? "cache" : "fallback",
       },
     }, {
       headers: {
@@ -249,6 +260,43 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error: "Failed to generate Tableau data",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST endpoint - Updates the cache with current holdings from client
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const holdings = body.holdings as Holding[];
+
+    if (!holdings || !Array.isArray(holdings)) {
+      return NextResponse.json(
+        { error: "Holdings array is required" },
+        { status: 400 }
+      );
+    }
+
+    // Update the cache
+    const cache = getPortfolioCache();
+    cache.updateHoldings(holdings);
+
+    return NextResponse.json({
+      success: true,
+      message: "Portfolio cache updated",
+      holdingsCount: holdings.length,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[tableau-data] Error updating cache:", error);
+    return NextResponse.json(
+      {
+        error: "Failed to update portfolio cache",
         message: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }

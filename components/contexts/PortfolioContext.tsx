@@ -402,10 +402,10 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
                   if (response.ok) {
                     const data = await response.json();
                     if (data.price) {
-                      // Update holdings with initial prices
+                      // Update holdings with initial prices and source
                       setHoldings((prev) => 
                         prev.map((h) => 
-                          h.ticker === ticker ? { ...h, price: data.price } : h
+                          h.ticker === ticker ? { ...h, price: data.price, priceSource: data.priceSource } : h
                         )
                       );
                     }
@@ -457,6 +457,7 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
           bloomberg?: number; 
           refinitiv?: number;
           isUSTicker?: boolean;
+          source?: string;
         }>();
         
         for (let i = 0; i < uniqueTickers.length; i += batchSize) {
@@ -481,6 +482,7 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
                     bloomberg: data.totalShares_Bloomberg,
                     refinitiv: data.totalShares_Refinitiv,
                     isUSTicker: data.isUSTicker,
+                    source: data.source,
                   });
                 }
               }
@@ -514,6 +516,7 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
                   // Use fetched Bloomberg/Refinitiv values if available (from SEC API), otherwise use shares value
                   totalShares_Bloomberg: newSharesData.bloomberg || newSharesData.shares,
                   totalShares_Refinitiv: newSharesData.refinitiv || newSharesData.shares,
+                  sharesOutstandingSource: newSharesData.source,
                   lastUpdated: now,
                   assetStatus: 'OK' as const,
                 };
@@ -537,15 +540,16 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
         if (updatedShares.size > 0) {
           setHoldings((prev) => {
             return prev.map((holding) => {
-              const newShares = updatedShares.get(holding.ticker);
-              if (newShares && newShares !== holding.totalSharesOutstanding) {
+              const newSharesData = updatedShares.get(holding.ticker);
+              if (newSharesData && newSharesData.shares !== holding.totalSharesOutstanding) {
                 // Update shares outstanding and mark data sources
                 const now = new Date().toISOString();
                 return {
                   ...holding,
-                  totalSharesOutstanding: newShares,
-                  totalShares_Bloomberg: newShares, // Use fetched value as Bloomberg source
-                  totalShares_Refinitiv: holding.totalShares_Refinitiv || newShares, // Use fetched or keep existing
+                  totalSharesOutstanding: newSharesData.shares,
+                  totalShares_Bloomberg: newSharesData.shares, // Use fetched value as Bloomberg source
+                  totalShares_Refinitiv: holding.totalShares_Refinitiv || newSharesData.shares, // Use fetched or keep existing
+                  sharesOutstandingSource: newSharesData.source,
                   lastUpdated: now,
                   assetStatus: 'OK' as const,
                 };
@@ -633,6 +637,8 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
                     lastUpdated: assetData.lastUpdated,
                     // Store real-time price (always update, no threshold)
                     price: assetData.price,
+                    // Store price source if available
+                    ...((assetData as any).priceSource && { priceSource: (assetData as any).priceSource }),
                     // Update shares based on position percentage if available
                     ...(assetData.currentPosition !== undefined && {
                       sharesOwned: (h.totalSharesOutstanding * assetData.currentPosition) / 100,
@@ -669,6 +675,8 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
                   ...h,
                   lastUpdated: assetData.lastUpdated,
                   price: assetData.price,
+                  // Store price source if available
+                  ...((assetData as any).priceSource && { priceSource: (assetData as any).priceSource }),
                   ...(assetData.currentPosition !== undefined && {
                     sharesOwned: (h.totalSharesOutstanding * assetData.currentPosition) / 100,
                   }),

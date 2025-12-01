@@ -71,6 +71,14 @@ export interface Holding {
    */
   totalShares_Refinitiv?: number;
   /**
+   * Data source for shares outstanding (e.g., 'yahoo_finance', 'finnhub', 'sec_api', etc.)
+   */
+  sharesOutstandingSource?: string;
+  /**
+   * Data source for price data (e.g., 'finnhub', 'yahoo_finance', etc.)
+   */
+  priceSource?: string;
+  /**
    * Asset data quality status. Set to 'DATA_quality_WARNING' when data sources disagree.
    * Affects whether auto-filing is enabled.
    */

@@ -9,15 +9,16 @@ import {
 /**
  * Demo mode adapter that mimics production data behavior exactly.
  *
- * Uses sophisticated financial models for position tracking and volatility.
- * This adapter behaves identically to RestProductionAdapter, but uses mock data
- * instead of real external API calls. All timing, frequencies, and data structures
- * match production mode exactly.
+ * Uses real prices from Yahoo Finance API while maintaining mock positions and regulatory data.
+ * This adapter behaves identically to RestProductionAdapter, but uses mock data for positions
+ * while fetching real-time prices from Yahoo Finance exclusively. All timing, frequencies, 
+ * and data structures match production mode exactly.
  */
 export class MockAdapter implements IPortfolioDataProvider {
   private subscribers = new Map<string, Array<(data: AssetData) => void>>();
   private pollIntervals = new Map<string, ReturnType<typeof setInterval>>();
   private generator: RealisticMarketDataGenerator;
+  private priceCache = new Map<string, { price: number; timestamp: number; jurisdiction?: string }>();
 
   // Optional callback used by the RiskContext to surface synthetic latency
   constructor(private onLatencyUpdate?: (ms: number) => void) {
@@ -44,29 +45,17 @@ export class MockAdapter implements IPortfolioDataProvider {
     // If this ticker already has a polling interval, don't create another one
     // (multiple callbacks can share the same interval)
     if (this.pollIntervals.has(ticker)) {
-      // Fire immediately for the new callback
-      const data = this.generator.generatePriceUpdate(ticker);
-      if (data) {
-        callback(data);
-      }
+      // Fire immediately for the new callback with real price if available
+      this.fetchAndDispatchPrice(ticker, [callback], true);
       return;
     }
 
     // Poll function that matches production adapter behavior
     // This will call ALL callbacks for this ticker
     const poll = async () => {
-      try {
-        // Generate mock data (matches production API response structure)
-        const data = this.generator.generatePriceUpdate(ticker);
-        if (data) {
-          // Call all callbacks for this ticker
-          const callbacks = this.subscribers.get(ticker) ?? [];
-          callbacks.forEach((cb) => cb(data));
-          this.simulateLatency();
-        }
-      } catch {
-        // Swallow errors here; connection state is surfaced via connect()
-        // This matches RestProductionAdapter error handling
+      const callbacks = this.subscribers.get(ticker) ?? [];
+      if (callbacks.length > 0) {
+        await this.fetchAndDispatchPrice(ticker, callbacks, false);
       }
     };
 
@@ -102,6 +91,84 @@ export class MockAdapter implements IPortfolioDataProvider {
     }
     this.pollIntervals.clear();
     this.subscribers.clear();
+    this.priceCache.clear();
+  }
+
+  /**
+   * Fetch real price from Yahoo Finance API and dispatch to callbacks
+   */
+  private async fetchAndDispatchPrice(
+    ticker: string, 
+    callbacks: Array<(data: AssetData) => void>,
+    immediate: boolean = false
+  ): Promise<void> {
+    try {
+      // Generate mock data structure (for positions, etc.)
+      const mockData = this.generator.generatePriceUpdate(ticker);
+      if (!mockData) return;
+      
+      const cached = this.priceCache.get(ticker);
+      const now = Date.now();
+      
+      // Use cached price if less than 5 seconds old, otherwise fetch fresh
+      let realPrice: number | null = null;
+      if (cached && (now - cached.timestamp < 5000)) {
+        realPrice = cached.price;
+      } else {
+        // Fetch real price from Yahoo Finance API (exclusively, no fallbacks)
+        try {
+          const jurisdiction = cached?.jurisdiction || mockData?.jurisdiction || "USA";
+          const response = await fetch(
+            `/api/real-time-prices?ticker=${encodeURIComponent(ticker)}&jurisdiction=${encodeURIComponent(jurisdiction)}`,
+            { cache: "no-store" }
+          );
+          
+          if (response.ok) {
+            const priceData = await response.json();
+            if (priceData.price) {
+              realPrice = priceData.price;
+              // Cache the real price
+              this.priceCache.set(ticker, { 
+                price: realPrice, 
+                timestamp: now,
+                jurisdiction: priceData.jurisdiction || jurisdiction
+              });
+            }
+          } else {
+            console.debug(`[MockAdapter] Yahoo Finance API returned ${response.status} for ${ticker}`);
+          }
+        } catch (error) {
+          console.debug(`[MockAdapter] Failed to fetch Yahoo Finance price for ${ticker}:`, error);
+        }
+      }
+      
+      // ONLY use real price from Yahoo Finance - no fallback to mock prices
+      if (!realPrice) {
+        // If Yahoo Finance price is not available, don't update the price
+        // This ensures we never show mock prices
+        if (immediate) {
+          console.debug(`[MockAdapter] Yahoo Finance price not available for ${ticker}, skipping update`);
+        }
+        return;
+      }
+      
+      // Update the mock data with real price from Yahoo Finance exclusively
+      const data: AssetData = {
+        ...mockData,
+        price: realPrice,
+        priceSource: 'yahoo_finance',
+      };
+      
+      // Call all callbacks for this ticker
+      callbacks.forEach((cb) => cb(data));
+      this.simulateLatency();
+    } catch (error) {
+      // Swallow errors here; connection state is surfaced via connect()
+      // This matches RestProductionAdapter error handling
+      if (immediate) {
+        console.debug(`[MockAdapter] Error in immediate price fetch for ${ticker}:`, error);
+      }
+    }
   }
 
   private simulateLatency() {

@@ -62,16 +62,21 @@ export default function RealtimeTableauDashboard() {
     setLastRefresh(new Date());
   }, []);
 
-  // Update Tableau data cache when holdings change
+  // Sync holdings to server cache when they change
   useEffect(() => {
+    if (holdings.length === 0) return;
+
     let isMounted = true;
-    
-    const updateCache = async () => {
+
+    const syncHoldings = async () => {
       try {
         // Update the server-side cache with current holdings
-        const response = await fetch("/api/tableau/data?format=json", {
-          method: "GET",
-          cache: "no-store",
+        const response = await fetch("/api/tableau/data", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ holdings }),
         });
         
         if (!isMounted) return;
@@ -90,16 +95,12 @@ export default function RealtimeTableauDashboard() {
           // Silently ignore - these are expected during server restarts
           return;
         }
-        console.error("Error updating Tableau data cache:", error);
+        console.error("Error syncing holdings to server:", error);
       }
     };
 
-    // Add a small delay to avoid requests during server restart
-    const timeout = setTimeout(() => {
-      if (isMounted) {
-        updateCache();
-      }
-    }, 1000);
+    // Debounce to avoid too many requests
+    const timeout = setTimeout(syncHoldings, 500);
 
     return () => {
       isMounted = false;
@@ -310,10 +311,10 @@ export default function RealtimeTableauDashboard() {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsConfigOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsConfigOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveConfig} disabled={!tableauUrl}>
+              <Button type="button" onClick={handleSaveConfig} disabled={!tableauUrl}>
                 Save Configuration
               </Button>
             </div>

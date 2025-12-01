@@ -33,6 +33,23 @@ type FilingProgress = {
   message: string;
 };
 
+// Helper function to format data source name
+function formatDataSourceName(source: string | undefined | null): string {
+  if (!source) return "Not Available";
+  switch (source) {
+    case 'yahoo_finance': return 'Yahoo Finance';
+    case 'finnhub': return 'Finnhub';
+    case 'sec_api': return 'SEC API';
+    case 'alpha_vantage': return 'Alpha Vantage';
+    case 'financial_modeling_prep': return 'FMP';
+    case 'polygon': return 'Polygon';
+    case 'mock_fallback': return 'Mock Data';
+    case 'cache': return 'Cached';
+    case 'unknown': return 'Unknown';
+    default: return source.toUpperCase();
+  }
+}
+
 export default function CompliancePanel({ open, onOpenChange }: CompliancePanelProps) {
   const [filingProgress, setFilingProgress] = useState<FilingProgress>({
     step: "idle",
@@ -253,7 +270,12 @@ export default function CompliancePanel({ open, onOpenChange }: CompliancePanelP
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Total Shares Outstanding</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-muted-foreground">Total Shares Outstanding</p>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 border border-blue-500/30 font-medium">
+                      Source: {formatDataSourceName(holding.sharesOutstandingSource)}
+                    </span>
+                  </div>
                   <p className="font-mono text-sm">
                     {holding.totalSharesOutstanding.toLocaleString("en-US", { maximumFractionDigits: 0 })}
                   </p>
@@ -389,6 +411,7 @@ export default function CompliancePanel({ open, onOpenChange }: CompliancePanelP
                     exit={{ opacity: 0 }}
                   >
                     <Button
+                      type="button"
                       onClick={generateFiling}
                       className="w-full"
                       size="lg"
@@ -469,6 +492,7 @@ export default function CompliancePanel({ open, onOpenChange }: CompliancePanelP
                               requirements.
                             </p>
                             <Button
+                              type="button"
                               variant="outline"
                               size="sm"
                               className="w-full"

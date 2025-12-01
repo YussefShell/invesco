@@ -10,6 +10,7 @@ interface SharesOutstandingResponse {
   sharesOutstanding: number;
   source: string;
   timestamp: string;
+  isRealData?: boolean;
 }
 
 interface SharesOutstandingError {
@@ -53,20 +54,38 @@ export async function fetchSharesOutstanding(
 
 /**
  * Fetch shares outstanding for multiple tickers in batch
+ * Returns a map of ticker -> { shares: number, source: string }
  */
 export async function fetchMultipleSharesOutstanding(
   tickers: string[]
-): Promise<Map<string, number>> {
-  const results = new Map<string, number>();
+): Promise<Map<string, { shares: number; source?: string }>> {
+  const results = new Map<string, { shares: number; source?: string }>();
 
   // Fetch in parallel with rate limiting (max 5 concurrent requests)
   const batchSize = 5;
   for (let i = 0; i < tickers.length; i += batchSize) {
     const batch = tickers.slice(i, i + batchSize);
     const promises = batch.map(async (ticker) => {
-      const shares = await fetchSharesOutstanding(ticker);
-      if (shares !== null) {
-        results.set(ticker, shares);
+      try {
+        const response = await fetch(
+          `/api/shares-outstanding?ticker=${encodeURIComponent(ticker)}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+
+        if (response.ok) {
+          const data = (await response.json()) as SharesOutstandingResponse;
+          if (data.sharesOutstanding) {
+            results.set(ticker, { 
+              shares: data.sharesOutstanding,
+              source: data.source 
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`Error fetching shares outstanding for ${ticker}:`, error);
       }
       // Small delay to avoid rate limiting
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -80,10 +99,11 @@ export async function fetchMultipleSharesOutstanding(
 
 /**
  * Update shares outstanding for holdings if data is stale (older than 1 hour for real-time updates)
+ * Returns a map of ticker -> { shares: number, source: string }
  */
 export async function updateStaleSharesOutstanding(
   holdings: Array<{ ticker: string; lastUpdated?: string }>
-): Promise<Map<string, number>> {
+): Promise<Map<string, { shares: number; source?: string }>> {
   const now = Date.now();
   const staleThreshold = 1 * 60 * 60 * 1000; // 1 hour (reduced from 24 hours for real-time updates)
 

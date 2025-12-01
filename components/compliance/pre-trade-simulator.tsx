@@ -362,6 +362,7 @@ export default function PreTradeSimulator({
                       className="pt-4 border-t border-border"
                     >
                       <Button
+                        type="button"
                         onClick={handleRequestApproval}
                         className="w-full"
                         size="lg"
@@ -447,10 +448,10 @@ export default function PreTradeSimulator({
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={handleReset}>
+            <Button type="button" variant="outline" onClick={handleReset}>
               Reset
             </Button>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Close
             </Button>
           </div>

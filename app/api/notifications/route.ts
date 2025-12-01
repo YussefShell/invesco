@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("startDate") || undefined;
     const endDate = searchParams.get("endDate") || undefined;
 
-    const history = service.getNotificationHistory(page, pageSize, {
+    const history = await service.getNotificationHistory(page, pageSize, {
       recipientId,
       channel: channel as any,
       severity: severity as any,

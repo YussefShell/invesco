@@ -2,6 +2,101 @@
 
 import { NextResponse } from "next/server";
 import type { AssetData, Jurisdiction } from "@/types";
+import { getDataAdapterConfig } from "@/lib/config/data-adapters";
+import { CircuitBreaker } from "@/lib/utils/circuit-breaker";
+import { Logger } from "@/lib/utils/logger";
+
+const logger = new Logger("MarketDataAPI");
+const config = getDataAdapterConfig();
+
+// Circuit breaker instance (shared across requests)
+const circuitBreaker = new CircuitBreaker({
+  failureThreshold: config.circuitBreaker.failureThreshold,
+  resetTimeout: config.circuitBreaker.resetTimeout,
+});
+
+/**
+ * Fetch with timeout support
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fetch with retry logic and exponential backoff
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = config.marketData.maxRetries
+): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetchWithTimeout(
+        url,
+        options,
+        config.marketData.timeout
+      );
+
+      if (response.ok) {
+        circuitBreaker.recordSuccess();
+        return response;
+      }
+
+      // Don't retry on 4xx errors (client errors)
+      if (response.status >= 400 && response.status < 500) {
+        circuitBreaker.recordFailure();
+        return response;
+      }
+
+      // Retry on 5xx errors
+      lastError = new Error(`HTTP ${response.status}`);
+      logger.warn("Upstream error, will retry", {
+        status: response.status,
+        attempt: attempt + 1,
+        maxRetries,
+      });
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      // Exponential backoff
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s...
+        logger.debug("Retrying after delay", {
+          attempt: attempt + 1,
+          delay,
+          error: lastError.message,
+        });
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  circuitBreaker.recordFailure();
+  throw lastError || new Error("Max retries exceeded");
+}
 
 /**
  * Server-side adapter endpoint that proxies to an upstream market data gateway
@@ -14,10 +109,6 @@ import type { AssetData, Jurisdiction } from "@/types";
  *   - GET /v1/quotes?ticker=NVDA&jurisdiction=USA
  *     -> { ticker, price, position, jurisdiction, asOf }
  */
-
-const BASE_URL = process.env.MARKET_DATA_BASE_URL;
-const API_KEY = process.env.MARKET_DATA_API_KEY;
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const ticker = searchParams.get("ticker");
@@ -30,7 +121,8 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!BASE_URL) {
+  if (!config.marketData.baseUrl) {
+    logger.error("Market data base URL not configured");
     return NextResponse.json(
       {
         error:
@@ -41,8 +133,26 @@ export async function GET(request: Request) {
     );
   }
 
+  // Check circuit breaker
+  if (!circuitBreaker.canExecute()) {
+    logger.warn("Circuit breaker is OPEN, rejecting request", {
+      ticker,
+      circuitState: circuitBreaker.getState(),
+      failureCount: circuitBreaker.getFailureCount(),
+    });
+    return NextResponse.json(
+      {
+        error: "Service temporarily unavailable",
+        details: "Circuit breaker is OPEN due to repeated failures",
+        hint: "The upstream gateway is experiencing issues. Please try again later.",
+        circuitState: circuitBreaker.getState(),
+      },
+      { status: 503 }
+    );
+  }
+
   try {
-    const upstreamUrl = new URL("/v1/quotes", BASE_URL);
+    const upstreamUrl = new URL("/v1/quotes", config.marketData.baseUrl);
     upstreamUrl.searchParams.set("ticker", ticker);
     if (jurisdiction) {
       upstreamUrl.searchParams.set("jurisdiction", jurisdiction);
@@ -50,25 +160,47 @@ export async function GET(request: Request) {
 
     const headers: Record<string, string> = {
       Accept: "application/json",
+      "Content-Type": "application/json",
     };
-    if (API_KEY) {
-      headers["Authorization"] = `Bearer ${API_KEY}`;
+
+    if (config.marketData.apiKey) {
+      headers["Authorization"] = `Bearer ${config.marketData.apiKey}`;
     }
 
-    const res = await fetch(upstreamUrl.toString(), {
+    logger.debug("Fetching market data", {
+      ticker,
+      jurisdiction,
+      url: upstreamUrl.toString().replace(config.marketData.apiKey || "", "***"),
+    });
+
+    const res = await fetchWithRetry(upstreamUrl.toString(), {
+      method: "GET",
       headers,
       cache: "no-store",
     });
 
     if (!res.ok) {
       const text = await res.text();
+      let errorBody: any;
+      try {
+        errorBody = JSON.parse(text);
+      } catch {
+        errorBody = { message: text };
+      }
+
+      logger.warn("Upstream market data request failed", {
+        ticker,
+        status: res.status,
+        error: errorBody,
+      });
+
       return NextResponse.json(
         {
           error: "Upstream market data request failed",
           status: res.status,
-          body: text,
+          details: errorBody,
         },
-        { status: 502 }
+        { status: res.status >= 500 ? 502 : res.status }
       );
     }
 
@@ -88,18 +220,25 @@ export async function GET(request: Request) {
       lastUpdated: body.asOf ?? new Date().toISOString(),
     };
 
+    logger.debug("Market data fetched successfully", { ticker, price: payload.price });
+
     return NextResponse.json(payload);
   } catch (error: any) {
-    console.error("[market-data] Error:", error);
+    logger.error("Failed to fetch market data", {
+      ticker,
+      error: error?.message,
+      circuitState: circuitBreaker.getState(),
+      failureCount: circuitBreaker.getFailureCount(),
+    });
+
     return NextResponse.json(
       {
         error: "Failed to reach upstream market data gateway",
         details: error?.message ?? String(error),
-        hint: "For development, use the 'Mock' data source in the application UI to avoid this error.",
+        hint: "For development, use the 'Mock' data source in the application UI",
+        circuitState: circuitBreaker.getState(),
       },
       { status: 500 }
     );
   }
 }
-
-

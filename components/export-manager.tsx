@@ -430,6 +430,7 @@ export default function ExportManager() {
                       <div className="flex items-center gap-2">
                         {job.status === "completed" && job.fileUrl && (
                           <Button
+                            type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => {
@@ -553,10 +554,10 @@ function ExportDialog({
             </Select>
           </div>
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={handleExport} disabled={loading}>
+            <Button type="button" onClick={handleExport} disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -738,10 +739,10 @@ function ScheduledReportDialog({
             <Label htmlFor="enabled">Enable this report</Label>
           </div>
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>Save Report</Button>
+            <Button type="button" onClick={handleSave}>Save Report</Button>
           </div>
         </div>
       </DialogContent>

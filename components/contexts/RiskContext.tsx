@@ -15,6 +15,7 @@ import { RestProductionAdapter } from "@/lib/adapters/RestProductionAdapter";
 import { WebSocketProductionAdapter } from "@/lib/adapters/WebSocketProductionAdapter";
 import { FixProtocolAdapter, type ParsedFixMessage } from "@/lib/adapters/FixProtocolAdapter";
 import { RealMarketAdapter } from "@/lib/adapters/RealMarketAdapter";
+import { getDataAdapterConfig } from "@/lib/config/data-adapters";
 
 export type DataSource = "mock" | "prod-rest" | "prod-ws" | "crd" | "finnhub";
 export type ProductionAdapterType = "rest" | "websocket";
@@ -122,13 +123,15 @@ export const RiskProvider: React.FC<React.PropsWithChildren> = ({
       
       newProvider = new RealMarketAdapter(apiKey);
     } else {
-      // For WebSocket, you can configure the URL and auth token here
-      // In a real app, these would come from env vars or a config service
+      // For WebSocket, use enhanced configuration
+      const config = getDataAdapterConfig();
       newProvider = new WebSocketProductionAdapter({
-        wsBaseUrl:
-          process.env.NEXT_PUBLIC_WS_BASE_URL ||
-          "wss://your-gateway.example.com/market-stream",
-        authToken: process.env.NEXT_PUBLIC_WS_AUTH_TOKEN,
+        wsBaseUrl: config.websocket.baseUrl || "wss://your-gateway.example.com/market-stream",
+        authToken: config.websocket.authToken,
+        reconnectAttempts: config.websocket.reconnectAttempts,
+        reconnectDelay: config.websocket.reconnectDelay,
+        heartbeatInterval: config.websocket.heartbeatInterval,
+        connectionTimeout: config.websocket.connectionTimeout,
       });
     }
     
