@@ -12,24 +12,25 @@ import { runMigrations } from "./migrations";
 let sql: any = null;
 
 // Initialize sql client using the same logic as client.ts
-function getSqlClient() {
+async function getSqlClient() {
   if (sql) return sql;
   
   const config = getDatabaseConfig();
   if (!config.enabled || !config.connectionString) {
     // Try @vercel/postgres for Vercel auto-config
     try {
-      const vercelPostgres = require("@vercel/postgres");
+      const vercelPostgres = await import("@vercel/postgres");
       sql = vercelPostgres.sql;
       return sql;
     } catch (error) {
+      console.error("[DB] Failed to import @vercel/postgres:", error);
       return null;
     }
   }
   
   // Use postgres.js for Supabase/external PostgreSQL
   try {
-    const postgres = require("postgres");
+    const postgres = await import("postgres");
     const postgresOptions: any = {
       max: 10,
       idle_timeout: 20,
@@ -40,15 +41,17 @@ function getSqlClient() {
       postgresOptions.ssl = { rejectUnauthorized: false };
     }
     
-    sql = postgres(config.connectionString, postgresOptions);
+    sql = postgres.default(config.connectionString, postgresOptions);
     return sql;
   } catch (error) {
+    console.error("[DB] Failed to import postgres.js:", error);
     // Fall back to @vercel/postgres
     try {
-      const vercelPostgres = require("@vercel/postgres");
+      const vercelPostgres = await import("@vercel/postgres");
       sql = vercelPostgres.sql;
       return sql;
     } catch (vercelError) {
+      console.error("[DB] Failed to import @vercel/postgres fallback:", vercelError);
       return null;
     }
   }
@@ -75,8 +78,10 @@ export async function ensureDatabaseInitialized(): Promise<boolean> {
       return false;
     }
 
-    const sqlClient = getSqlClient();
+    const sqlClient = await getSqlClient();
     if (!sqlClient) {
+      const error = new Error("Database module not available - could not initialize SQL client");
+      initError = error;
       console.log("[DB] Database module not available, skipping initialization");
       return false;
     }
