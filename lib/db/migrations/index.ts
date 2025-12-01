@@ -251,7 +251,9 @@ export async function getCurrentMigrationVersion(
     const result = await sql`
       SELECT MAX(version) as max_version FROM schema_migrations
     `;
-    return result.rows[0]?.max_version || 0;
+    // Handle both postgres.js and @vercel/postgres result formats
+    const rows = Array.isArray(result) ? result : (result.rows || []);
+    return rows[0]?.max_version || 0;
   } catch (error) {
     // If table doesn't exist, return 0
     return 0;
