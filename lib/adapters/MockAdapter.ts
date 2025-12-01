@@ -127,12 +127,14 @@ export class MockAdapter implements IPortfolioDataProvider {
             const priceData = await response.json();
             if (priceData.price) {
               realPrice = priceData.price;
-              // Cache the real price
-              this.priceCache.set(ticker, { 
-                price: realPrice, 
-                timestamp: now,
-                jurisdiction: priceData.jurisdiction || jurisdiction
-              });
+              // Cache the real price (only if we have a valid price)
+              if (realPrice !== null) {
+                this.priceCache.set(ticker, { 
+                  price: realPrice, 
+                  timestamp: now,
+                  jurisdiction: priceData.jurisdiction || jurisdiction
+                });
+              }
             }
           } else {
             console.debug(`[MockAdapter] Yahoo Finance API returned ${response.status} for ${ticker}`);
