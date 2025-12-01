@@ -237,13 +237,17 @@ export default function Dashboard() {
                   </Select>
                 </div>
                 <div className="text-[10px] text-muted-foreground px-3">
-                  {dataSource === "finnhub" 
-                    ? "Real-time prices from market data. Buying velocity: Simulated mock data." 
-                    : dataSource === "mock"
-                    ? "Simulated data for development. Buying velocity: Simulated mock data."
-                    : dataSource === "crd"
-                    ? "FIX Protocol from Charles River. Buying velocity: Simulated mock data."
-                    : "Production data source. Buying velocity: Simulated mock data."}
+                  {isClient ? (
+                    dataSource === "finnhub" 
+                      ? "Real-time prices from market data. Buying velocity: Simulated mock data." 
+                      : dataSource === "mock"
+                      ? "Simulated data for development. Buying velocity: Simulated mock data."
+                      : dataSource === "crd"
+                      ? "FIX Protocol from Charles River. Buying velocity: Simulated mock data."
+                      : "Production data source. Buying velocity: Simulated mock data."
+                  ) : (
+                    "Loading data source information..."
+                  )}
                 </div>
               </div>
               {/* Scope Toggle - Entity Aggregation Engine */}
