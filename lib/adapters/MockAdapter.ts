@@ -158,7 +158,6 @@ export class MockAdapter implements IPortfolioDataProvider {
       const data: AssetData = {
         ...mockData,
         price: realPrice,
-        priceSource: 'yahoo_finance',
       };
       
       // Call all callbacks for this ticker
