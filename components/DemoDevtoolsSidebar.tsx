@@ -1,6 +1,7 @@
 "use client";
 
 import { usePortfolio } from "@/components/contexts/PortfolioContext";
+import { useRisk } from "@/components/contexts/RiskContext";
 import { useRiskCalculator } from "@/lib/use-risk-calculator";
 import { formatDurationFromHours } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ export default function DemoDevtoolsSidebar() {
     simulateMarketPriceDrop,
     setSimulateMarketPriceDrop,
   } = usePortfolio();
+  const { dataSource, dataProvider } = useRisk();
 
   const activeHolding =
     holdings.find((h) => h.ticker === selectedTicker) ?? holdings[0];
@@ -57,9 +59,17 @@ export default function DemoDevtoolsSidebar() {
       <div className="space-y-2">
         <label className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Current Buy Velocity</span>
-          <span className="font-mono text-[10px]">
-            {activeHolding.buyingVelocity.toLocaleString()} sh/hr
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-[10px]">
+              {activeHolding.buyingVelocity.toLocaleString()} sh/hr
+            </span>
+            <span 
+              className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/30 font-semibold"
+              title="Simulated mock data. In production, this would be calculated from Invesco's order execution database."
+            >
+              SIMULATED
+            </span>
+          </div>
         </label>
         <input
           type="range"
@@ -73,7 +83,12 @@ export default function DemoDevtoolsSidebar() {
             })
           }
           className="w-full"
+          disabled={dataSource === "finnhub"}
+          title={dataSource === "finnhub" ? "Buying velocity is calculated from real market data and cannot be manually adjusted" : "Adjust buying velocity manually"}
         />
+        <p className="text-[9px] text-muted-foreground italic">
+          Simulated mock data. In production: calculated from Invesco order execution database.
+        </p>
       </div>
 
       <div className="space-y-2">

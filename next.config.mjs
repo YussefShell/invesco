@@ -18,6 +18,8 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Apply security headers to page routes
+        // Note: Next.js automatically handles _next/static paths separately
         source: '/:path*',
         headers: [
           {
@@ -35,6 +37,7 @@ const nextConfig = {
         ],
       },
       {
+        // Static assets with proper caching
         source: '/_next/static/:path*',
         headers: [
           {

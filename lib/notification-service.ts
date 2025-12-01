@@ -327,7 +327,20 @@ export class NotificationService {
       }
 
       console.log(`Email sent successfully to ${email}`);
-    } catch (error) {
+    } catch (error: any) {
+      // Ignore network errors that occur during server restarts
+      if (error?.message?.includes('Failed to fetch') || 
+          error?.message?.includes('ERR_NETWORK_CHANGED') ||
+          error?.name === 'TypeError') {
+        // Silently ignore - these are expected during server restarts
+        // Fallback: log to console if API route fails (for development)
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[EMAIL] (Network error - server may be restarting) To: ${email}`);
+          console.log(`[EMAIL] Subject: ${notification.title}`);
+        }
+        return; // Don't throw - allow notifications to continue
+      }
+      
       // Fallback: log to console if API route fails (for development)
       console.log(`[EMAIL] To: ${email}`);
       console.log(`[EMAIL] Subject: ${notification.title}`);

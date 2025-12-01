@@ -7,7 +7,16 @@
  * - Falls back gracefully if database is not configured
  */
 
-import { sql } from "@vercel/postgres";
+// Safe import that handles missing database configuration
+let sql: any = null;
+
+try {
+  const postgres = require("@vercel/postgres");
+  sql = postgres.sql;
+} catch (error) {
+  console.warn("[DB] @vercel/postgres not available, database features will be disabled");
+  // sql will remain null and functions will check before use
+}
 
 export interface DatabaseConfig {
   enabled: boolean;
@@ -18,9 +27,6 @@ export interface DatabaseConfig {
  * Get database configuration from environment variables
  */
 export function getDatabaseConfig(): DatabaseConfig {
-  // Check if database is enabled via environment variable
-  const enabled = process.env.DATABASE_ENABLED !== "false"; // Default to true if not set
-  
   // Vercel Postgres provides connection string automatically
   // For local dev, use POSTGRES_URL or DATABASE_URL
   const connectionString = 
@@ -28,6 +34,12 @@ export function getDatabaseConfig(): DatabaseConfig {
     process.env.DATABASE_URL ||
     process.env.POSTGRES_PRISMA_URL ||
     process.env.POSTGRES_URL_NON_POOLING;
+
+  // Check if database is enabled via environment variable
+  // Default to false if no connection string is available
+  const explicitlyEnabled = process.env.DATABASE_ENABLED === "true";
+  const explicitlyDisabled = process.env.DATABASE_ENABLED === "false";
+  const enabled = explicitlyDisabled ? false : (explicitlyEnabled || !!connectionString);
 
   return {
     enabled: enabled && !!connectionString,
@@ -45,6 +57,11 @@ export async function initializeDatabase(): Promise<boolean> {
     
     if (!config.enabled) {
       console.log("[DB] Database disabled or not configured, skipping initialization");
+      return false;
+    }
+
+    if (!sql) {
+      console.log("[DB] Database module not available, skipping initialization");
       return false;
     }
 
@@ -197,6 +214,9 @@ export async function checkDatabaseHealth(): Promise<boolean> {
   try {
     const config = getDatabaseConfig();
     if (!config.enabled) {
+      return false;
+    }
+    if (!sql) {
       return false;
     }
     await sql`SELECT 1`;

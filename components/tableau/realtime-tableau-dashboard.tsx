@@ -40,24 +40,47 @@ export default function RealtimeTableauDashboard() {
 
   // Update Tableau data cache when holdings change
   useEffect(() => {
+    let isMounted = true;
+    
     const updateCache = async () => {
       try {
         // Update the server-side cache with current holdings
-        await fetch("/api/tableau/data?format=json", {
+        const response = await fetch("/api/tableau/data?format=json", {
           method: "GET",
           cache: "no-store",
         });
         
-        // If auto-refresh is enabled and we have a Tableau URL, refresh the viz
-        if (autoRefresh && tableauUrl && vizRef.current) {
-          refreshTableauViz();
+        if (!isMounted) return;
+        
+        if (response.ok) {
+          // If auto-refresh is enabled and we have a Tableau URL, refresh the viz
+          if (autoRefresh && tableauUrl && vizRef.current) {
+            refreshTableauViz();
+          }
         }
-      } catch (error) {
+      } catch (error: any) {
+        // Ignore network errors that occur during server restarts
+        if (error?.message?.includes('Failed to fetch') || 
+            error?.message?.includes('ERR_NETWORK_CHANGED') ||
+            error?.name === 'TypeError') {
+          // Silently ignore - these are expected during server restarts
+          return;
+        }
         console.error("Error updating Tableau data cache:", error);
       }
     };
 
-    updateCache();
+    // Add a small delay to avoid requests during server restart
+    const timeout = setTimeout(() => {
+      if (isMounted) {
+        updateCache();
+      }
+    }, 1000);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+    };
   }, [holdings, autoRefresh, tableauUrl]);
 
   // Auto-refresh Tableau dashboard every 30 seconds when enabled

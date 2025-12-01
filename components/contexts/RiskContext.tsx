@@ -14,8 +14,9 @@ import { MockAdapter } from "@/lib/adapters/MockAdapter";
 import { RestProductionAdapter } from "@/lib/adapters/RestProductionAdapter";
 import { WebSocketProductionAdapter } from "@/lib/adapters/WebSocketProductionAdapter";
 import { FixProtocolAdapter, type ParsedFixMessage } from "@/lib/adapters/FixProtocolAdapter";
+import { RealMarketAdapter } from "@/lib/adapters/RealMarketAdapter";
 
-export type DataSource = "mock" | "prod-rest" | "prod-ws" | "crd";
+export type DataSource = "mock" | "prod-rest" | "prod-ws" | "crd" | "finnhub";
 export type ProductionAdapterType = "rest" | "websocket";
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
@@ -103,6 +104,23 @@ export const RiskProvider: React.FC<React.PropsWithChildren> = ({
       );
     } else if (dataSource === "prod-rest") {
       newProvider = new RestProductionAdapter();
+    } else if (dataSource === "finnhub") {
+      // Real Market Data Adapter - uses Finnhub WebSocket for live prices
+      // Hybrid model: Real prices + simulated positions
+      const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
+      
+      // Debug: Log API key status (only in development, first 4 chars for security)
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        if (apiKey) {
+          console.log('[RiskContext] Finnhub API key found:', apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4));
+        } else {
+          console.error('[RiskContext] NEXT_PUBLIC_FINNHUB_API_KEY is not set!');
+          console.error('[RiskContext] Please check your .env.local file and restart the dev server.');
+          console.error('[RiskContext] Current env keys:', Object.keys(process.env).filter(k => k.includes('FINNHUB')));
+        }
+      }
+      
+      newProvider = new RealMarketAdapter(apiKey);
     } else {
       // For WebSocket, you can configure the URL and auth token here
       // In a real app, these would come from env vars or a config service

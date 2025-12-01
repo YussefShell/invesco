@@ -8,6 +8,12 @@ import React, {
   useState,
 } from "react";
 import { historicalDataStore } from "@/lib/historical-data-store";
+import { 
+  getDefaultSystemId, 
+  getValidEventTypes, 
+  getBootMessage,
+  type AuditLogEventType 
+} from "@/lib/audit-log-config";
 
 interface AuditLogContextValue {
   entries: string[];
@@ -22,7 +28,7 @@ const AuditLogContext = createContext<AuditLogContextValue | undefined>(
 function parseLogLine(line: string): {
   timestamp: string;
   systemId: string;
-  level: "BOOT" | "BREACH" | "BREACH_WORKFLOW" | "SIMULATION" | "SYSTEM" | "INFO";
+  level: AuditLogEventType;
   message: string;
 } {
   const timestampMatch = line.match(/^\[([^\]]+)\]/);
@@ -35,10 +41,9 @@ function parseLogLine(line: string): {
     ? allBrackets[1].slice(1, -1) // Remove [ and ] from the match
     : "UNKNOWN";
   const levelMatchValue = levelMatch ? levelMatch[1] : "INFO";
-  const validLevels: Array<"BOOT" | "BREACH" | "BREACH_WORKFLOW" | "SIMULATION" | "SYSTEM" | "INFO"> = 
-    ["BOOT", "BREACH", "BREACH_WORKFLOW", "SIMULATION", "SYSTEM", "INFO"];
-  const level = validLevels.includes(levelMatchValue as any) 
-    ? (levelMatchValue as "BOOT" | "BREACH" | "BREACH_WORKFLOW" | "SIMULATION" | "SYSTEM" | "INFO")
+  const validLevels = getValidEventTypes();
+  const level = validLevels.includes(levelMatchValue as AuditLogEventType) 
+    ? (levelMatchValue as AuditLogEventType)
     : "INFO";
   const message = line.split("]: ").slice(1).join("]: ") || line;
 
@@ -59,9 +64,8 @@ export const AuditLogProvider: React.FC<React.PropsWithChildren> = ({
 
   // Add initial boot message only on client side to avoid hydration mismatch
   useEffect(() => {
-    const now = new Date().toISOString();
-    const systemId = "RISK-ENGINE-01";
-    const bootMessage = `[${now}] [${systemId}] [BOOT]: Regulatory audit log initialized. Monitoring for breaches and simulations...`;
+    const systemId = getDefaultSystemId();
+    const bootMessage = getBootMessage(systemId);
     setEntries([bootMessage]);
     
     // Persist the boot message

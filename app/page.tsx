@@ -2,8 +2,16 @@
 
 import { useEffect, useState, lazy, Suspense } from "react";
 import { usePortfolio } from "@/components/contexts/PortfolioContext";
-import { Shield, Calculator, Settings } from "lucide-react";
+import { Shield, Calculator, Settings, Info, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { DataSource } from "@/components/contexts/RiskContext";
 import { useAuditLog } from "@/components/contexts/AuditLogContext";
 import {
   Dialog,
@@ -18,19 +26,45 @@ import { LazyErrorBoundary } from "@/components/lazy-error-boundary";
 
 // Safe lazy loader wrapper that handles errors
 const safeLazy = (importFn: () => Promise<any>) => {
-  return lazy(() =>
-    importFn().catch((error) => {
-      console.error("Failed to load lazy component:", error);
-      // Return a fallback component instead of throwing
-      return {
+  if (typeof importFn !== 'function') {
+    console.error("safeLazy: importFn must be a function");
+    return lazy(() => Promise.resolve({
+      default: () => (
+        <div className="p-4 border border-yellow-500/20 rounded-lg bg-yellow-500/10 text-yellow-500 text-sm">
+          Component failed to load: Invalid import function.
+        </div>
+      ),
+    }));
+  }
+  
+  return lazy(() => {
+    try {
+      const promise = importFn();
+      if (!promise || typeof promise.then !== 'function') {
+        throw new Error("Import function did not return a promise");
+      }
+      return promise.catch((error) => {
+        console.error("Failed to load lazy component:", error);
+        // Return a fallback component instead of throwing
+        return {
+          default: () => (
+            <div className="p-4 border border-yellow-500/20 rounded-lg bg-yellow-500/10 text-yellow-500 text-sm">
+              Component failed to load. Please refresh the page.
+            </div>
+          ),
+        };
+      });
+    } catch (error) {
+      console.error("Failed to create lazy component:", error);
+      return Promise.resolve({
         default: () => (
           <div className="p-4 border border-yellow-500/20 rounded-lg bg-yellow-500/10 text-yellow-500 text-sm">
-            Component failed to load. Please refresh the page.
+            Component failed to load: {error instanceof Error ? error.message : 'Unknown error'}
           </div>
         ),
-      };
-    })
-  );
+      });
+    }
+  });
 };
 
 // OPTIMIZED: Lazy load ALL heavy components to improve initial load time
@@ -59,7 +93,7 @@ export default function Dashboard() {
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string>("--:--:--");
   const { appendLog } = useAuditLog();
   const {
     dataSource,
@@ -74,8 +108,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     // Set once on the client to avoid server/client time mismatch
-    setLastUpdated(new Date().toLocaleTimeString());
     setIsClient(true);
+    setLastUpdated(new Date().toLocaleTimeString());
+    
+    // Update time every second
+    const interval = setInterval(() => {
+      setLastUpdated(new Date().toLocaleTimeString());
+    }, 1000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const handleRowClick = (ticker: string) => {
@@ -100,6 +141,16 @@ export default function Dashboard() {
     setIsConfigOpen(true);
   };
 
+  // TEMPORARY: Auto-switch to Finnhub for testing
+  // Remove this useEffect after testing or set to false
+  useEffect(() => {
+    const AUTO_ENABLE_FINNHUB = true; // Set to false to disable auto-switch
+    if (AUTO_ENABLE_FINNHUB && dataSource !== "finnhub") {
+      console.log("[Test Mode] Auto-switching to Finnhub data source...");
+      setDataSource("finnhub");
+    }
+  }, [dataSource, setDataSource]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -121,10 +172,24 @@ export default function Dashboard() {
                         ? "Internal Simulation (Mock)"
                         : dataSource === "crd"
                         ? "Charles River (FIX Protocol)"
+                        : dataSource === "finnhub"
+                        ? "Finnhub Real-Time Market Data"
                         : dataSource === "prod-rest"
                         ? "Live Production (REST Gateway)"
                         : "Live Production (WebSocket Stream)"}
                     </span>
+                    {dataSource === "finnhub" && connectionStatus === "connected" && (
+                      <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/40 flex items-center gap-1 font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                        🔴 Live Market Data Streaming
+                      </span>
+                    )}
+                    {dataSource === "finnhub" && connectionStatus === "connecting" && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/40 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        Connecting to Finnhub...
+                      </span>
+                    )}
                     {dataSource === "mock" && connectionStatus === "connected" && (
                       <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/40 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -151,6 +216,36 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Data Source Selector */}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-card">
+                  <span className="text-xs text-muted-foreground font-medium">Data:</span>
+                  <Select
+                    value={dataSource}
+                    onValueChange={(value: DataSource) => setDataSource(value)}
+                  >
+                    <SelectTrigger className="h-7 w-[180px] text-xs border-0 bg-transparent p-0 focus:ring-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mock">Mock (Simulated)</SelectItem>
+                      <SelectItem value="finnhub">Finnhub (Real-Time)</SelectItem>
+                      <SelectItem value="crd">Charles River (FIX)</SelectItem>
+                      <SelectItem value="prod-rest">Production REST</SelectItem>
+                      <SelectItem value="prod-ws">Production WebSocket</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="text-[10px] text-muted-foreground px-3">
+                  {dataSource === "finnhub" 
+                    ? "Real-time prices from market data. Buying velocity: Simulated mock data." 
+                    : dataSource === "mock"
+                    ? "Simulated data for development. Buying velocity: Simulated mock data."
+                    : dataSource === "crd"
+                    ? "FIX Protocol from Charles River. Buying velocity: Simulated mock data."
+                    : "Production data source. Buying velocity: Simulated mock data."}
+                </div>
+              </div>
               {/* Scope Toggle - Entity Aggregation Engine */}
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-card">
@@ -210,7 +305,7 @@ export default function Dashboard() {
                   className="text-sm font-mono font-semibold"
                   suppressHydrationWarning
                 >
-                  {lastUpdated ?? "--:--:--"}
+                  {lastUpdated}
                 </p>
               </div>
             </div>
@@ -224,6 +319,67 @@ export default function Dashboard() {
           <NotificationMonitor />
         </Suspense>
       </LazyErrorBoundary>
+
+      {/* Buying Velocity Info Card - Explains Production Implementation */}
+      <div className="container mx-auto px-6 pt-4">
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Buying Velocity: Simulated Mock Data
+                  </h3>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground mb-1">Current Status:</p>
+                    <p className="text-xs text-muted-foreground">
+                      All buying velocity values shown in this platform are <strong>simulated mock data</strong> for demonstration purposes only.
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground mb-1">Production Implementation:</p>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      In a production deployment at Invesco, buying velocity would be calculated from actual trading data stored in Invesco's database:
+                    </p>
+                    <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-1.5 ml-2">
+                      <li>
+                        <strong>Order Flow Data:</strong> Query Invesco's order management system (OMS) database to retrieve executed buy orders for each security over a rolling time window (e.g., last 1 hour, 4 hours, or 24 hours)
+                      </li>
+                      <li>
+                        <strong>Aggregation:</strong> Sum the total shares purchased across all Invesco funds/entities for each ticker within the time window
+                      </li>
+                      <li>
+                        <strong>Velocity Calculation:</strong> Divide total shares purchased by the time window duration to get shares per hour
+                      </li>
+                      <li>
+                        <strong>Real-Time Updates:</strong> Continuously poll or subscribe to order execution events from Invesco's trading systems to update buying velocity in real-time
+                      </li>
+                      <li>
+                        <strong>Database Query Example:</strong> 
+                        <code className="block mt-1 px-2 py-1 rounded bg-muted/50 text-[10px] font-mono">
+                          SELECT ticker, SUM(shares_executed) / hours_elapsed AS buying_velocity<br/>
+                          FROM order_executions<br/>
+                          WHERE side = 'BUY' AND execution_time {'>'} NOW() - INTERVAL '1 hour'<br/>
+                          GROUP BY ticker
+                        </code>
+                      </li>
+                    </ol>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <p className="text-[10px] text-muted-foreground">
+                      <strong>Note:</strong> This demo platform uses simulated buying velocity values to demonstrate the regulatory risk monitoring capabilities. In production, these values would be sourced directly from Invesco's trading and portfolio management databases.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Main Content */}
       <main className="flex-1 container mx-auto px-6 py-6 space-y-6">

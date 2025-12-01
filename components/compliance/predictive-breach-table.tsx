@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, memo, useCallback } from "react";
+import { useMemo, useState, useEffect, memo, useCallback, forwardRef } from "react";
 import React from "react";
 import { motion } from "framer-motion";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -263,7 +263,7 @@ interface PredictiveRowProps {
   advancedFilterConfig: AdvancedFilterConfig;
 }
 
-function PredictiveRow({
+const PredictiveRow = forwardRef<HTMLTableRowElement, PredictiveRowProps>(function PredictiveRow({
   holding,
   onRowClick,
   shouldPulse,
@@ -272,13 +272,87 @@ function PredictiveRow({
   aggregationScope,
   allHoldings,
   advancedFilterConfig,
-}: PredictiveRowProps) {
+}, ref) {
   const { appendLog } = useAuditLog();
+  const { dataSource, dataProvider } = useRisk();
   const [alertStatus, setAlertStatus] = useState<AlertStatus>("OPEN");
   const [isEscalationModalOpen, setIsEscalationModalOpen] = useState(false);
   const [isXRayExpanded, setIsXRayExpanded] = useState(false);
+  const [priceFlash, setPriceFlash] = useState<"up" | "down" | null>(null);
+  const [isClient, setIsClient] = useState(false);
   
   const previousBreachStatusRef = React.useRef<"breach" | "warning" | "safe" | null>(null);
+  const previousPriceRef = React.useRef<number | undefined>(holding.price);
+  const [finnhubPrice, setFinnhubPrice] = useState<number | null>(null);
+  
+  // Ensure we're on the client before rendering dynamic dates
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Fetch real-time price from Finnhub API for accurate breach analysis
+  // This ensures we always use real market prices regardless of data source setting
+  useEffect(() => {
+    let isMounted = true;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+    
+    const fetchFinnhubPrice = async (isRetry = false) => {
+      try {
+        const response = await fetch(
+          `/api/real-time-prices?ticker=${encodeURIComponent(holding.ticker)}&jurisdiction=${encodeURIComponent(holding.jurisdiction)}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.price && isMounted) {
+            setFinnhubPrice(data.price);
+            retryCount = 0; // Reset retry count on success
+          } else if (!isRetry && retryCount < MAX_RETRIES) {
+            // Retry if no price returned (might be rate limited)
+            retryCount++;
+            setTimeout(() => fetchFinnhubPrice(true), 1000 * retryCount);
+          }
+        } else if (response.status === 503) {
+          // API unavailable - retry after delay
+          if (!isRetry && retryCount < MAX_RETRIES) {
+            retryCount++;
+            setTimeout(() => fetchFinnhubPrice(true), 2000 * retryCount);
+          }
+        }
+      } catch (error: any) {
+        // Ignore network errors that occur during server restarts
+        if (error?.message?.includes('Failed to fetch') || 
+            error?.message?.includes('ERR_NETWORK_CHANGED') ||
+            error?.name === 'TypeError') {
+          // Retry on network errors
+          if (!isRetry && retryCount < MAX_RETRIES) {
+            retryCount++;
+            setTimeout(() => fetchFinnhubPrice(true), 1000 * retryCount);
+          }
+          return;
+        }
+        console.debug(`[PredictiveBreach] Failed to fetch Finnhub price for ${holding.ticker}:`, error);
+      }
+    };
+
+    // Fetch immediately (no delay on first load)
+    fetchFinnhubPrice();
+    // Then fetch every 30 seconds to keep prices fresh
+    const interval = setInterval(() => {
+      retryCount = 0; // Reset retry count for periodic updates
+      fetchFinnhubPrice();
+    }, 30000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [holding.ticker, holding.jurisdiction]);
   
   // Check if this holding has hidden exposure via ETFs
   const hasHidden = useMemo(() => {
@@ -361,6 +435,21 @@ function PredictiveRow({
   const compliance = useMemo(() => {
     return evaluateRisk(holding.jurisdiction, ownershipPercent, "long", denominatorCheck.hasWarning);
   }, [holding.jurisdiction, ownershipPercent, denominatorCheck.hasWarning]);
+
+  // Track price changes for flash effect (use Finnhub price if available)
+  useEffect(() => {
+    const currentPrice = finnhubPrice !== null ? finnhubPrice : holding.price;
+    if (currentPrice !== undefined && previousPriceRef.current !== undefined) {
+      if (currentPrice > previousPriceRef.current) {
+        setPriceFlash("up");
+        setTimeout(() => setPriceFlash(null), 400);
+      } else if (currentPrice < previousPriceRef.current) {
+        setPriceFlash("down");
+        setTimeout(() => setPriceFlash(null), 400);
+      }
+    }
+    previousPriceRef.current = currentPrice;
+  }, [finnhubPrice, holding.price]);
 
   useEffect(() => {
     if (!breach || !ownershipPercent) return;
@@ -452,7 +541,22 @@ function PredictiveRow({
     };
   }, [compliance?.deadlineDays, compliance?.deadline, holding.jurisdiction]);
 
+  const [isMounted, setIsMounted] = useState(false);
+  
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const dataConfidence = useMemo(() => {
+    // Only calculate on client to avoid hydration mismatch
+    if (!isMounted) {
+      return {
+        color: "bg-emerald-400",
+        ring: "bg-emerald-400/40",
+        label: "Fresh",
+      };
+    }
+    
     const parsed = new Date(holding.lastUpdated);
     const ageMs = Date.now() - parsed.getTime();
 
@@ -489,7 +593,7 @@ function PredictiveRow({
       ring: "bg-emerald-400/40",
       label: "Fresh",
     };
-  }, [holding.lastUpdated]);
+  }, [holding.lastUpdated, isMounted]);
 
   if (!breach || ownershipPercent == null || !compliance) {
     return null;
@@ -582,6 +686,7 @@ function PredictiveRow({
   return (
     <>
     <motion.tr
+      ref={ref}
       className={`border-b border-border hover:bg-accent/50 cursor-pointer transition-colors ${
         pulse ? "bg-amber-500/10" : ""
       }`}
@@ -607,7 +712,7 @@ function PredictiveRow({
           : {}
       }
     >
-      <td className="p-2 text-sm font-medium">
+      <td className="p-2 text-sm font-medium text-left">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
             {/* Data Confidence Indicator */}
@@ -672,33 +777,56 @@ function PredictiveRow({
             <Badge
               variant={holding.reconStatus === "MATCH" ? "outline" : "warning"}
               className="text-xs ml-1"
-              title={`Last Ledger Check: ${new Date(holding.lastReconTimestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`}
+              title={isClient && holding.lastReconTimestamp 
+                ? `Last Ledger Check: ${new Date(holding.lastReconTimestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` 
+                : holding.lastReconTimestamp 
+                  ? `Last Ledger Check: ${new Date(holding.lastReconTimestamp).toISOString()}` 
+                  : 'Last Ledger Check: N/A'}
             >
               {holding.reconStatus === "MATCH" ? "✓" : "⚠"} Recon
             </Badge>
           )}
         </div>
       </td>
-      <td className="p-2 text-xs font-mono text-muted-foreground">
+      <td className="p-2 text-xs font-mono text-muted-foreground text-left">
         {advancedFilterConfig.searchText
           ? highlightSearchText(holding.isin, advancedFilterConfig.searchText)
           : holding.isin}
       </td>
-      <td className="p-2 text-sm">{holding.jurisdiction}</td>
+      <td className="p-2 text-sm text-left">{holding.jurisdiction}</td>
       <td className="p-2 text-sm text-right font-mono">
-        {holding.price !== undefined ? (
-          <div className="flex items-center justify-end gap-1">
-            <span className="text-foreground">
+        {(finnhubPrice !== null || holding.price !== undefined) ? (
+          <motion.div 
+            className="flex items-center justify-end gap-1 relative px-2 py-0.5 rounded"
+            animate={{
+              backgroundColor: priceFlash === "up" 
+                ? ["rgba(34, 197, 94, 0.3)", "rgba(34, 197, 94, 0.1)", "transparent"]
+                : priceFlash === "down"
+                ? ["rgba(239, 68, 68, 0.3)", "rgba(239, 68, 68, 0.1)", "transparent"]
+                : "transparent",
+            }}
+            transition={{
+              duration: 0.4,
+              ease: "easeOut",
+            }}
+          >
+            <span className={`text-foreground font-medium ${priceFlash === "up" ? "text-green-500" : priceFlash === "down" ? "text-red-500" : ""}`}>
               {holding.jurisdiction === "UK" ? "£" : holding.jurisdiction === "Hong Kong" ? "HK$" : "$"}
-              {holding.price.toLocaleString("en-US", {
+              {(finnhubPrice ?? holding.price ?? 0).toLocaleString("en-US", {
                 minimumFractionDigits: holding.jurisdiction === "APAC" && holding.ticker.includes(".KS") ? 0 : 2,
                 maximumFractionDigits: holding.jurisdiction === "APAC" && holding.ticker.includes(".KS") ? 0 : 2,
               })}
             </span>
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" title="Real-time price" />
-          </div>
+            <span 
+              className={`w-1.5 h-1.5 rounded-full ${finnhubPrice !== null ? "bg-green-500 animate-pulse" : holding.price ? "bg-blue-500" : "bg-yellow-500 animate-pulse"}`} 
+              title={finnhubPrice !== null ? "Real-time price from Finnhub.io" : holding.price ? "Price from data provider" : "Loading price..."} 
+            />
+          </motion.div>
         ) : (
-          <span className="text-muted-foreground">--</span>
+          <div className="flex items-center justify-end gap-1">
+            <span className="text-muted-foreground text-xs">Loading...</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" title="Fetching price from Finnhub.io..." />
+          </div>
         )}
       </td>
       <td className="p-2 text-sm text-right font-mono">
@@ -712,9 +840,19 @@ function PredictiveRow({
         </div>
       </td>
       <td className="p-2 text-sm text-right font-mono">
-        {holding.buyingVelocity.toLocaleString()} shares/hr
+        <div className="flex flex-col items-end gap-0.5">
+          <div className="flex items-center gap-1.5">
+            <span>{holding.buyingVelocity.toLocaleString()} shares/hr</span>
+            <span 
+              className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/30 font-semibold"
+              title="Simulated mock data. In production, this would be calculated from Invesco's order execution database."
+            >
+              SIMULATED
+            </span>
+          </div>
+        </div>
       </td>
-      <td className="p-2 text-sm">
+      <td className="p-2 text-sm text-left">
         <div className="flex flex-col gap-1">
           {getStatusBadge(breach.status, breach.timeToBreach)}
           {breach.status === "breach" && (
@@ -755,7 +893,7 @@ function PredictiveRow({
           )}
         </div>
       </td>
-      <td className="p-2 text-xs">
+      <td className="p-2 text-xs text-left">
         <div className="flex flex-col gap-1">
           <span className="font-mono font-semibold">
             {compliance.requiredForm}
@@ -878,7 +1016,7 @@ function PredictiveRow({
       )}
     </>
   );
-}
+});
 
 // OPTIMIZED: Memoize component to prevent unnecessary re-renders
 export default memo(PredictiveBreachTable);

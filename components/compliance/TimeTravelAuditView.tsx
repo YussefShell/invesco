@@ -15,15 +15,17 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Filter, X } from "lucide-react";
+import { getTickerExclusions, getAuditLogUIConfig } from "@/lib/audit-log-config";
 
 function VirtualizedAuditLogList({ filtered }: { filtered: string[] }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const uiConfig = getAuditLogUIConfig();
 
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 30,
-    overscan: 10,
+    estimateSize: () => uiConfig.virtualizer.estimateSize,
+    overscan: uiConfig.virtualizer.overscan,
   });
 
   if (filtered.length === 0) {
@@ -37,8 +39,8 @@ function VirtualizedAuditLogList({ filtered }: { filtered: string[] }) {
   return (
     <div
       ref={parentRef}
-      className="overflow-auto rounded border border-border bg-muted/40 px-3 py-2 font-mono text-[11px]"
-      style={{ maxHeight: "400px" }}
+      className={`overflow-auto rounded border border-border bg-muted/40 px-3 py-2 font-mono`}
+      style={{ maxHeight: uiConfig.container.maxHeight, fontSize: uiConfig.container.fontSize }}
     >
       <div
         style={{
@@ -106,8 +108,9 @@ function parseTicker(line: string): string | null {
   const tickerMatch = line.match(/([A-Z0-9]+(?:\.[A-Z]+)?(?:-[0-9]+)?)/);
   if (tickerMatch) {
     const potentialTicker = tickerMatch[1];
-    // Filter out common non-ticker patterns
-    if (!["RISK", "SIM", "ENGINE", "BOOT"].includes(potentialTicker)) {
+    // Filter out common non-ticker patterns using dynamic config
+    const exclusions = getTickerExclusions();
+    if (!exclusions.includes(potentialTicker.toUpperCase())) {
       return potentialTicker;
     }
   }

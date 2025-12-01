@@ -37,7 +37,7 @@ const createInitialHoldings = (): Holding[] => {
       jurisdiction: "USA",
       // Real-world: NVDA has ~2.46 billion shares outstanding (as of 2024)
       sharesOwned: 2_460_000_000 * 0.028, // 68.88M shares = 2.8% - Invesco Tech ETF
-      totalSharesOutstanding: 2_460_000_000, // Realistic: ~2.46B shares outstanding
+      totalSharesOutstanding: 2_460_000_000, // Will be updated from SEC API (US ticker)
       buyingVelocity: 12_500,
       regulatoryRule: regulatoryRules[0],
       lastUpdated: new Date(NOW - 30 * 1000).toISOString(), // < 1 minute (fresh)
@@ -46,6 +46,7 @@ const createInitialHoldings = (): Holding[] => {
       // Flash Recon: Data matches
       lastReconTimestamp: new Date(NOW - 45 * 60 * 1000).toISOString(), // 45 minutes ago
       reconStatus: 'MATCH',
+      // Bloomberg and Refinitiv values will be fetched from SEC API
       // Delta-adjusted exposure: Include some options
       derivativePositions: [
         {
@@ -65,12 +66,13 @@ const createInitialHoldings = (): Holding[] => {
       jurisdiction: "USA",
       // Real-world: NVDA has ~2.46 billion shares outstanding (as of 2024)
       sharesOwned: 2_460_000_000 * 0.023, // 56.58M shares = 2.3% - Invesco Global Growth
-      totalSharesOutstanding: 2_460_000_000, // Realistic: ~2.46B shares outstanding
+      totalSharesOutstanding: 2_460_000_000, // Will be updated from SEC API (US ticker)
       buyingVelocity: 8_000,
       regulatoryRule: regulatoryRules[0],
       lastUpdated: new Date(NOW - 45 * 1000).toISOString(),
       fundId: "INV-GLOBAL-GROWTH",
       parentId: "INVESCO-GROUP",
+      // Bloomberg and Refinitiv values will be fetched from SEC API
     },
     {
       id: "2",
@@ -79,11 +81,15 @@ const createInitialHoldings = (): Holding[] => {
       isin: "KYG875721634",
       jurisdiction: "Hong Kong",
       // Real-world: Tencent has ~9.52 billion shares outstanding (as of 2024)
+      // NOTE: Non-US ticker (.HK) - data is hardcoded (SEC API only supports US-listed companies)
       sharesOwned: 9_520_000_000 * 0.048, // 456.96M shares = 4.8%
-      totalSharesOutstanding: 9_520_000_000, // Realistic: ~9.52B shares outstanding
+      totalSharesOutstanding: 9_520_000_000, // Hardcoded: ~9.52B shares outstanding
       buyingVelocity: 8_500,
       regulatoryRule: regulatoryRules[3],
       lastUpdated: new Date(NOW - 20 * 60 * 1000).toISOString(), // > 15 minutes (stale)
+      // Hardcoded values for non-US ticker (SEC API doesn't support international exchanges)
+      totalShares_Bloomberg: 9_510_000_000,
+      totalShares_Refinitiv: 9_530_000_000,
     },
     {
       id: "3",
@@ -92,11 +98,15 @@ const createInitialHoldings = (): Holding[] => {
       isin: "GB0007188757",
       jurisdiction: "UK",
       // Real-world: Rio Tinto has ~1.63 billion shares outstanding (as of 2024)
+      // NOTE: Non-US ticker (UK-listed) - data is hardcoded (SEC API only supports US-listed companies)
       sharesOwned: 1_630_000_000 * 0.031, // 50.53M shares = 3.1%
-      totalSharesOutstanding: 1_630_000_000, // Realistic: ~1.63B shares outstanding
+      totalSharesOutstanding: 1_630_000_000, // Hardcoded: ~1.63B shares outstanding
       buyingVelocity: 3_200,
       regulatoryRule: regulatoryRules[2],
       lastUpdated: new Date(NOW - 70 * 60 * 1000).toISOString(), // > 1 hour (feed error)
+      // Hardcoded values for non-US ticker (SEC API doesn't support international exchanges)
+      totalShares_Bloomberg: 1_625_000_000,
+      totalShares_Refinitiv: 1_635_000_000,
     },
     {
       id: "4",
@@ -107,13 +117,11 @@ const createInitialHoldings = (): Holding[] => {
       // Real-world: AAPL has ~15.5 billion shares outstanding (as of 2024)
       // For demo: 4.8% direct holding = 744M shares (appears safe, below 5% threshold)
       sharesOwned: 15_500_000_000 * 0.048, // 744,000,000 shares = 4.8%
-      totalSharesOutstanding: 15_500_000_000, // Realistic: ~15.5B shares outstanding
+      totalSharesOutstanding: 15_500_000_000, // Will be updated from SEC API (US ticker)
       buyingVelocity: 15_200,
       regulatoryRule: regulatoryRules[1],
       lastUpdated: new Date(NOW - 2 * 60 * 1000).toISOString(),
-      // Bloomberg and Refinitiv agree (within 1%) - no data quality warning
-      totalShares_Bloomberg: 15_498_000_000,
-      totalShares_Refinitiv: 15_502_000_000,
+      // Bloomberg and Refinitiv values will be fetched from SEC API
       assetStatus: 'OK',
       // Flash Recon: Data matches
       lastReconTimestamp: new Date(NOW - 30 * 60 * 1000).toISOString(), // 30 minutes ago
@@ -142,11 +150,15 @@ const createInitialHoldings = (): Holding[] => {
       isin: "GB0005405286",
       jurisdiction: "UK",
       // Real-world: HSBC has ~19.2 billion shares outstanding (as of 2024)
+      // NOTE: Non-US ticker - data is hardcoded (SEC API only supports US-listed companies)
       sharesOwned: 19_200_000_000 * 0.027, // 518.4M shares = 2.7%
-      totalSharesOutstanding: 19_200_000_000, // Realistic: ~19.2B shares outstanding
+      totalSharesOutstanding: 19_200_000_000, // Hardcoded: ~19.2B shares outstanding
       buyingVelocity: 1_800,
       regulatoryRule: regulatoryRules[2],
       lastUpdated: new Date(NOW - 10 * 60 * 1000).toISOString(),
+      // Hardcoded values for non-US ticker (SEC API doesn't support international exchanges)
+      totalShares_Bloomberg: 19_180_000_000,
+      totalShares_Refinitiv: 19_220_000_000,
     },
     {
       id: "6",
@@ -156,10 +168,11 @@ const createInitialHoldings = (): Holding[] => {
       jurisdiction: "USA",
       // Real-world: Alibaba has ~2.1 billion shares outstanding (as of 2024)
       sharesOwned: 2_100_000_000 * 0.0495, // 103.95M shares = 4.95%
-      totalSharesOutstanding: 2_100_000_000, // Realistic: ~2.1B shares outstanding
+      totalSharesOutstanding: 2_100_000_000, // Will be updated from SEC API (US ticker)
       buyingVelocity: 9_800,
       regulatoryRule: regulatoryRules[0],
       lastUpdated: new Date(NOW - 40 * 60 * 1000).toISOString(), // > 30 minutes
+      // Bloomberg and Refinitiv values will be fetched from SEC API
     },
     {
       id: "7",
@@ -168,8 +181,9 @@ const createInitialHoldings = (): Holding[] => {
       isin: "KR7005930003",
       jurisdiction: "APAC",
       // Real-world: Samsung Electronics has ~596 million shares outstanding (as of 2024)
+      // NOTE: Non-US ticker (.KS) - data is hardcoded (SEC API only supports US-listed companies)
       sharesOwned: 596_000_000 * 0.042, // 25.032M shares = 4.2%
-      totalSharesOutstanding: 596_000_000, // Realistic: ~596M shares outstanding
+      totalSharesOutstanding: 596_000_000, // Hardcoded: ~596M shares outstanding
       buyingVelocity: 4_200,
       regulatoryRule: {
         code: "K-SD",
@@ -179,6 +193,9 @@ const createInitialHoldings = (): Holding[] => {
         jurisdiction: "APAC",
       },
       lastUpdated: new Date(NOW - 5 * 60 * 1000).toISOString(),
+      // Hardcoded values for non-US ticker (SEC API doesn't support international exchanges)
+      totalShares_Bloomberg: 595_000_000,
+      totalShares_Refinitiv: 597_000_000,
     },
     {
       id: "8",
@@ -188,14 +205,12 @@ const createInitialHoldings = (): Holding[] => {
       jurisdiction: "USA",
       // Real-world: MSFT has ~7.4 billion shares outstanding (as of 2024)
       sharesOwned: 7_400_000_000 * 0.0515, // 381.1M shares = 5.15% (active breach)
-      totalSharesOutstanding: 7_400_000_000, // Realistic: ~7.4B shares outstanding
+      totalSharesOutstanding: 7_400_000_000, // Will be updated from SEC API (US ticker)
       buyingVelocity: 11_200,
       regulatoryRule: regulatoryRules[1],
       lastUpdated: new Date(NOW - 55 * 60 * 1000).toISOString(),
-      // Bloomberg and Refinitiv differ by > 1% - triggers DATA_quality_WARNING
-      totalShares_Bloomberg: 7_200_000_000, // 7.2B from Bloomberg
-      totalShares_Refinitiv: 7_600_000_000, // 7.6B from Refinitiv (5.5% difference > 1% threshold)
-      assetStatus: 'DATA_quality_WARNING', // Will be set by checkDenominatorConfidence
+      // Bloomberg and Refinitiv values will be fetched from SEC API
+      assetStatus: 'OK', // Will be updated by checkDenominatorConfidence based on SEC data
       // Flash Recon: Data drifts
       lastReconTimestamp: new Date(NOW - 15 * 60 * 1000).toISOString(), // 15 minutes ago
       reconStatus: 'DRIFT',
@@ -364,6 +379,55 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
             startTime: Date.now(),
           });
         });
+        
+        // Pre-fetch prices for initial holdings to avoid showing "--" on refresh
+        // Fetch prices in batches to avoid overwhelming the API (async, non-blocking)
+        const uniqueTickers = Array.from(new Set(initialHoldings.map(h => h.ticker)));
+        const batchSize = 5;
+        
+        const fetchPrices = async () => {
+          for (let i = 0; i < uniqueTickers.length; i += batchSize) {
+            const batch = uniqueTickers.slice(i, i + batchSize);
+            await Promise.all(
+              batch.map(async (ticker) => {
+                const holding = initialHoldings.find(h => h.ticker === ticker);
+                if (!holding) return;
+                
+                try {
+                  const response = await fetch(
+                    `/api/real-time-prices?ticker=${encodeURIComponent(ticker)}&jurisdiction=${encodeURIComponent(holding.jurisdiction)}`,
+                    { method: "GET", cache: "no-store" }
+                  );
+                  
+                  if (response.ok) {
+                    const data = await response.json();
+                    if (data.price) {
+                      // Update holdings with initial prices
+                      setHoldings((prev) => 
+                        prev.map((h) => 
+                          h.ticker === ticker ? { ...h, price: data.price } : h
+                        )
+                      );
+                    }
+                  }
+                } catch (error) {
+                  // Silently fail - prices will be fetched by individual components
+                  console.debug(`[PortfolioContext] Failed to pre-fetch price for ${ticker}`);
+                }
+              })
+            );
+            
+            // Small delay between batches to avoid rate limiting
+            if (i + batchSize < uniqueTickers.length) {
+              await new Promise(resolve => setTimeout(resolve, 200));
+            }
+          }
+        };
+        
+        // Start fetching prices asynchronously (non-blocking)
+        fetchPrices().catch(() => {
+          // Prices will be fetched by individual components if pre-fetch fails
+        });
       };
       
       // Defer initialization to next idle period, or use setTimeout as fallback
@@ -388,7 +452,12 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
         
         // Fetch all tickers in parallel (with rate limiting)
         const batchSize = 5;
-        const updatedShares = new Map<string, number>();
+        const updatedShares = new Map<string, { 
+          shares: number; 
+          bloomberg?: number; 
+          refinitiv?: number;
+          isUSTicker?: boolean;
+        }>();
         
         for (let i = 0; i < uniqueTickers.length; i += batchSize) {
           const batch = uniqueTickers.slice(i, i + batchSize);
@@ -404,11 +473,25 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
 
               if (response.ok) {
                 const data = await response.json();
-                if (data.sharesOutstanding && data.isRealData) {
-                  updatedShares.set(ticker, data.sharesOutstanding);
+                // Update if we have shares outstanding data (real or cached)
+                // Always include Bloomberg/Refinitiv values if provided (even for cached/mock data)
+                if (data.sharesOutstanding) {
+                  updatedShares.set(ticker, {
+                    shares: data.sharesOutstanding,
+                    bloomberg: data.totalShares_Bloomberg,
+                    refinitiv: data.totalShares_Refinitiv,
+                    isUSTicker: data.isUSTicker,
+                  });
                 }
               }
-            } catch (error) {
+            } catch (error: any) {
+              // Ignore network errors that occur during server restarts
+              if (error?.message?.includes('Failed to fetch') || 
+                  error?.message?.includes('ERR_NETWORK_CHANGED') ||
+                  error?.name === 'TypeError') {
+                // Silently ignore - these are expected during server restarts
+                return;
+              }
               console.error(`Error fetching shares outstanding for ${ticker}:`, error);
             }
             // Small delay to avoid rate limiting
@@ -421,15 +504,16 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
         if (updatedShares.size > 0) {
           setHoldings((prev) => {
             return prev.map((holding) => {
-              const newShares = updatedShares.get(holding.ticker);
-              if (newShares && newShares !== holding.totalSharesOutstanding) {
+              const newSharesData = updatedShares.get(holding.ticker);
+              if (newSharesData && newSharesData.shares !== holding.totalSharesOutstanding) {
                 // Update shares outstanding with real data
                 const now = new Date().toISOString();
                 return {
                   ...holding,
-                  totalSharesOutstanding: newShares,
-                  totalShares_Bloomberg: newShares, // Use fetched value as Bloomberg source
-                  totalShares_Refinitiv: holding.totalShares_Refinitiv || newShares, // Use fetched or keep existing
+                  totalSharesOutstanding: newSharesData.shares,
+                  // Use fetched Bloomberg/Refinitiv values if available (from SEC API), otherwise use shares value
+                  totalShares_Bloomberg: newSharesData.bloomberg || newSharesData.shares,
+                  totalShares_Refinitiv: newSharesData.refinitiv || newSharesData.shares,
                   lastUpdated: now,
                   assetStatus: 'OK' as const,
                 };
@@ -524,6 +608,12 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
         // Update real-time price cache
         realTimePricesRef.current.set(holding.ticker, assetData);
         
+        // Calculate volume-based buying velocity if using RealMarketAdapter
+        let volumeBasedVelocity: number | undefined;
+        if (dataProvider && 'calculateBuyingVelocity' in dataProvider && typeof (dataProvider as any).calculateBuyingVelocity === 'function') {
+          volumeBasedVelocity = (dataProvider as any).calculateBuyingVelocity(holding.ticker);
+        }
+        
         // Batch price updates using requestIdleCallback for minimal CPU impact
         if (typeof requestIdleCallback !== 'undefined') {
           requestIdleCallback(() => {
@@ -547,6 +637,10 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
                     ...(assetData.currentPosition !== undefined && {
                       sharesOwned: (h.totalSharesOutstanding * assetData.currentPosition) / 100,
                     }),
+                    // Update buying velocity based on real market volume (1.5% of daily volume)
+                    ...(volumeBasedVelocity !== undefined && {
+                      buyingVelocity: volumeBasedVelocity,
+                    }),
                     // Set assetStatus based on denominator confidence check
                     assetStatus: denominatorCheck.assetStatus,
                   };
@@ -564,6 +658,12 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
             setHoldings((prev) => {
             const updated = prev.map((h) => {
               if (h.ticker === holding.ticker) {
+                // Calculate volume-based velocity if available
+                let volumeBasedVelocity: number | undefined;
+                if (dataProvider && 'calculateBuyingVelocity' in dataProvider && typeof (dataProvider as any).calculateBuyingVelocity === 'function') {
+                  volumeBasedVelocity = (dataProvider as any).calculateBuyingVelocity(holding.ticker);
+                }
+                
                 // Always update price and position data when available (no threshold)
                 return {
                   ...h,
@@ -571,6 +671,10 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
                   price: assetData.price,
                   ...(assetData.currentPosition !== undefined && {
                     sharesOwned: (h.totalSharesOutstanding * assetData.currentPosition) / 100,
+                  }),
+                  // Update buying velocity based on real market volume
+                  ...(volumeBasedVelocity !== undefined && {
+                    buyingVelocity: volumeBasedVelocity,
                   }),
                 };
               }
@@ -730,6 +834,37 @@ export const PortfolioProvider: React.FC<React.PropsWithChildren> = ({
     };
   }, [holdings.length]);
 
+  // Periodic update of buying velocity based on real market volume (for RealMarketAdapter)
+  useEffect(() => {
+    if (!dataProvider || connectionStatus !== "connected" || holdings.length === 0) return;
+    
+    // Check if adapter supports volume-based velocity calculation
+    if (!('calculateBuyingVelocity' in dataProvider) || typeof (dataProvider as any).calculateBuyingVelocity !== 'function') {
+      return;
+    }
+
+    const updateVelocityFromVolume = () => {
+      setHoldings((prev) => {
+        return prev.map((holding) => {
+          const volumeBasedVelocity = (dataProvider as any).calculateBuyingVelocity(holding.ticker);
+          if (volumeBasedVelocity && volumeBasedVelocity > 0) {
+            return {
+              ...holding,
+              buyingVelocity: volumeBasedVelocity,
+            };
+          }
+          return holding;
+        });
+      });
+    };
+
+    // Update immediately, then every 60 seconds
+    updateVelocityFromVolume();
+    const interval = setInterval(updateVelocityFromVolume, 60000);
+
+    return () => clearInterval(interval);
+  }, [dataProvider, connectionStatus, holdings.length]);
+
   const updateHolding = (ticker: string, updates: Partial<Holding>) => {
     setHoldings((prev) =>
       prev.map((h) =>
@@ -769,5 +904,6 @@ export const usePortfolio = (): PortfolioContextValue => {
   }
   return ctx;
 };
+
 
 

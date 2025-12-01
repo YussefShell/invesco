@@ -105,10 +105,13 @@ async function fetchAlphaVantagePrice(ticker: string): Promise<number | null> {
  */
 async function fetchFinnhubPrice(ticker: string): Promise<number | null> {
   const apiKey = process.env.FINNHUB_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.debug('[Finnhub] API key not configured');
+    return null;
+  }
   
   try {
-    // Clean ticker for Finnhub
+    // Clean ticker for Finnhub (remove exchange suffixes)
     const cleanTicker = ticker.split('.')[0];
     
     const url = `https://finnhub.io/api/v1/quote?symbol=${cleanTicker}&token=${apiKey}`;
@@ -116,15 +119,35 @@ async function fetchFinnhubPrice(ticker: string): Promise<number | null> {
       next: { revalidate: 0 },
     });
     
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (res.status === 429) {
+        console.warn(`[Finnhub] Rate limit exceeded for ${ticker}`);
+      } else {
+        console.debug(`[Finnhub] Request failed for ${ticker}: ${res.status} ${res.statusText}`);
+      }
+      return null;
+    }
     
     const data = await res.json();
-    if (data?.c) { // 'c' is current price
+    if (data?.c && data.c > 0) { // 'c' is current price, must be positive
+      console.debug(`[Finnhub] Successfully fetched price for ${ticker}: $${data.c}`);
       return data.c;
     }
     
+    // If price is 0 or null, it might be market closed or invalid ticker
+    if (data?.c === 0) {
+      console.debug(`[Finnhub] Price is 0 for ${ticker} (market may be closed)`);
+    }
+    
     return null;
-  } catch {
+  } catch (error: any) {
+    // Ignore network errors that occur during server restarts
+    if (error?.message?.includes('Failed to fetch') || 
+        error?.message?.includes('ERR_NETWORK_CHANGED') ||
+        error?.name === 'TypeError') {
+      return null;
+    }
+    console.error(`[Finnhub] Error fetching price for ${ticker}:`, error);
     return null;
   }
 }
@@ -168,19 +191,24 @@ export async function GET(request: Request) {
     }
 
     // Try multiple data sources in order
+    // PRIORITY: Finnhub first (if API key available) for real-time accuracy
+    // Then fallback to other sources
     let price: number | null = null;
     
-    // 1. Try Yahoo Finance first (free, no API key)
-    price = await fetchYahooFinancePrice(ticker);
-    
-    // 2. Fallback to Alpha Vantage if available
-    if (!price) {
-      price = await fetchAlphaVantagePrice(ticker);
+    // 1. Try Finnhub first (if API key is available) - prioritized for real-time accuracy
+    const finnhubApiKey = process.env.FINNHUB_API_KEY;
+    if (finnhubApiKey) {
+      price = await fetchFinnhubPrice(ticker);
     }
     
-    // 3. Fallback to Finnhub if available
+    // 2. Fallback to Yahoo Finance (free, no API key)
     if (!price) {
-      price = await fetchFinnhubPrice(ticker);
+      price = await fetchYahooFinancePrice(ticker);
+    }
+    
+    // 3. Fallback to Alpha Vantage if available
+    if (!price) {
+      price = await fetchAlphaVantagePrice(ticker);
     }
 
     if (!price) {

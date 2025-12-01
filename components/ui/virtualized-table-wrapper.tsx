@@ -66,20 +66,29 @@ export function VirtualizedTableWrapper<T>({
                 const rowContent = renderRow(data[virtualRow.index], virtualRow.index);
                 // Clone the row element and add positioning styles
                 if (React.isValidElement(rowContent)) {
+                  // Get the original ref from the element (for forwardRef components, this is in props)
+                  const originalRef = (rowContent as any).ref;
+                  
+                  // Create a ref callback that combines virtualizer measurement with original ref
+                  const combinedRef = (el: HTMLElement | null) => {
+                    // Measure for virtualizer
+                    if (el) {
+                      virtualizer.measureElement(el);
+                    }
+                    // Call original ref if it exists (for forwardRef components)
+                    if (originalRef) {
+                      if (typeof originalRef === 'function') {
+                        originalRef(el);
+                      } else if (originalRef && typeof originalRef === 'object' && 'current' in originalRef) {
+                        originalRef.current = el;
+                      }
+                    }
+                  };
+                  
                   return React.cloneElement(rowContent as React.ReactElement<any>, {
                     key: virtualRow.key,
                     'data-index': virtualRow.index,
-                    ref: (el: HTMLElement | null) => {
-                      virtualizer.measureElement(el);
-                      // Also call the original ref if it exists
-                      if (rowContent.props.ref) {
-                        if (typeof rowContent.props.ref === 'function') {
-                          rowContent.props.ref(el);
-                        } else if (rowContent.props.ref.current !== undefined) {
-                          rowContent.props.ref.current = el;
-                        }
-                      }
-                    },
+                    ref: combinedRef,
                     style: {
                       position: "absolute",
                       top: 0,
