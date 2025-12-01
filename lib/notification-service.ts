@@ -357,11 +357,56 @@ export class NotificationService {
   }
 
   private async sendPushNotification(pushToken: string, notification: Notification): Promise<void> {
-    // Push notifications would be handled via FCM/APNS
-    // For now, just log
-    console.log(`[PUSH] Token: ${pushToken}`);
-    console.log(`[PUSH] Title: ${notification.title}`);
-    console.log(`[PUSH] Message: ${notification.message}`);
+    // Use Next.js API route to send push notifications
+    // Supports FCM (Firebase Cloud Messaging) for Android/web and APNS for iOS
+    try {
+      const baseUrl = this.getApiBaseUrl();
+      const url = baseUrl ? `${baseUrl}/api/notifications/send-push` : "/api/notifications/send-push";
+      
+      // Determine platform from token or use default
+      let platform: "ios" | "android" | "web" | undefined;
+      if (pushToken.length === 64 && /^[a-fA-F0-9]+$/.test(pushToken)) {
+        platform = "ios";
+      } else if (pushToken.length > 100) {
+        platform = "android";
+      } else {
+        platform = "web";
+      }
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: pushToken,
+          title: notification.title,
+          message: notification.message,
+          data: {
+            notificationId: notification.id,
+            ticker: notification.ticker,
+            jurisdiction: notification.jurisdiction,
+            severity: notification.severity,
+            ...notification.metadata,
+          },
+          platform,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Push service returned ${response.status}`);
+      }
+
+      console.log(`Push notification sent successfully to ${pushToken.substring(0, 20)}...`);
+    } catch (error) {
+      // Fallback: log to console if API route fails (for development)
+      console.log(`[PUSH] Token: ${pushToken.substring(0, 20)}...`);
+      console.log(`[PUSH] Title: ${notification.title}`);
+      console.log(`[PUSH] Message: ${notification.message}`);
+      // Don't throw in development mode - allow notifications to continue
+      if (process.env.NODE_ENV === "production") {
+        throw error;
+      }
+    }
   }
 
   private formatEmailBody(notification: Notification): string {

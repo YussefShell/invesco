@@ -22,3 +22,4 @@ export function calculateDeltaAdjustedExposure(holding: Holding): number {
   return totalExposure;
 }
 
+

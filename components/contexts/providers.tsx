@@ -6,6 +6,7 @@ import { AuditLogProvider } from "@/components/contexts/AuditLogContext";
 import { RiskProvider } from "@/components/contexts/RiskContext";
 import { HistoricalDataProvider } from "@/components/contexts/HistoricalDataContext";
 import { IntegrationSettingsProvider } from "@/components/contexts/IntegrationSettingsContext";
+import { ScheduledReportsSchedulerInit } from "@/components/scheduled-reports-scheduler-init";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <IntegrationSettingsProvider>
           <PortfolioProvider>
             <HistoricalDataProvider>
+              <ScheduledReportsSchedulerInit />
               {children}
             </HistoricalDataProvider>
           </PortfolioProvider>

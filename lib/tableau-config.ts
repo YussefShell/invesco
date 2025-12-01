@@ -74,11 +74,8 @@ export function validateTableauConfig(config: TableauConfig): {
 /**
  * Generate JWT token for Tableau Connected App authentication
  * 
- * Note: This is a placeholder. In production, JWT generation should be done
- * server-side using a library like 'jsonwebtoken' with proper signing.
- * 
- * For production use, create an API route that generates the JWT token
- * server-side and returns it to the client.
+ * This function calls the server-side API route to generate JWT tokens securely.
+ * The actual token generation is handled server-side to protect credentials.
  */
 export async function generateTableauJWT(
   clientId: string,
@@ -87,12 +84,38 @@ export async function generateTableauJWT(
   username?: string,
   scopes: string[] = ["tableau:views:embed"]
 ): Promise<string> {
-  // This should be implemented server-side
-  // For now, return a placeholder
-  throw new Error(
-    "JWT generation must be implemented server-side. " +
-    "Create an API route that uses a JWT library to sign tokens with your Connected App credentials."
-  );
+  try {
+    // Call the server-side API route for secure JWT generation
+    const response = await fetch("/api/tableau/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: username || "guest",
+        scopes: scopes,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.error || `Failed to generate JWT token: ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+    return data.token;
+  } catch (error) {
+    // If fetch fails (e.g., in server-side context), throw descriptive error
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(
+      "Failed to generate JWT token. Ensure the API route is accessible and credentials are configured."
+    );
+  }
 }
+
 
 
