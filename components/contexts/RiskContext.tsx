@@ -141,10 +141,16 @@ export const RiskProvider: React.FC<React.PropsWithChildren> = ({
           throw new Error("Data provider not initialized");
         }
         
-        await providerRef.current.connect();
+        const connected = await providerRef.current.connect();
         if (!cancelled) {
-          setConnectionStatus("connected");
-          setConnectionError(null);
+          if (connected === false) {
+            // Graceful failure (e.g., missing API key)
+            setConnectionStatus("error");
+            setConnectionError("Finnhub API key is required. Set NEXT_PUBLIC_FINNHUB_API_KEY environment variable.");
+          } else {
+            setConnectionStatus("connected");
+            setConnectionError(null);
+          }
         }
       } catch (error: any) {
         if (!cancelled) {

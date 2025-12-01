@@ -44,7 +44,9 @@ export class RealMarketAdapter implements IPortfolioDataProvider {
     }
 
     if (!this.apiKey) {
-      throw new Error('Finnhub API key is required. Set NEXT_PUBLIC_FINNHUB_API_KEY environment variable.');
+      // Return false instead of throwing to allow graceful degradation
+      console.warn('[RealMarketAdapter] Finnhub API key is required. Set NEXT_PUBLIC_FINNHUB_API_KEY environment variable.');
+      return false;
     }
 
     this.isConnecting = true;

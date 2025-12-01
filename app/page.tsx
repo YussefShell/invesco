@@ -142,9 +142,9 @@ export default function Dashboard() {
   };
 
   // TEMPORARY: Auto-switch to Finnhub for testing
-  // Remove this useEffect after testing or set to false
+  // Disabled by default - only enable if API key is configured
   useEffect(() => {
-    const AUTO_ENABLE_FINNHUB = true; // Set to false to disable auto-switch
+    const AUTO_ENABLE_FINNHUB = false; // Set to true only if NEXT_PUBLIC_FINNHUB_API_KEY is set
     if (AUTO_ENABLE_FINNHUB && dataSource !== "finnhub") {
       console.log("[Test Mode] Auto-switching to Finnhub data source...");
       setDataSource("finnhub");
