@@ -214,7 +214,8 @@ async function sendViaAPNS(
     let apn: any;
     try {
       // Use dynamic require for optional dependency
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // This is intentional - @parse/node-apn is optional
+      // @ts-ignore - Optional dependency may not be installed
       apn = require("@parse/node-apn");
     } catch (requireError) {
       return NextResponse.json(

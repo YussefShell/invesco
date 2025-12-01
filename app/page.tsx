@@ -45,6 +45,7 @@ const NotificationMonitor = safeLazy(() => import("@/components/notifications/no
 const AdvancedAnalyticsDashboard = safeLazy(() => import("@/components/analytics/advanced-analytics-dashboard"));
 const IntegrationSettings = safeLazy(() => import("@/components/admin/IntegrationSettings"));
 const TableauRiskDashboard = safeLazy(() => import("@/components/tableau/tableau-risk-dashboard"));
+const RealtimeTableauDashboard = safeLazy(() => import("@/components/tableau/realtime-tableau-dashboard"));
 const TimeTravelAuditView = safeLazy(() => import("@/components/compliance/TimeTravelAuditView"));
 const HistoricalBreachViewer = safeLazy(() => import("@/components/compliance/historical-breach-viewer"));
 const TrendAnalysisViewer = safeLazy(() => import("@/components/analytics/trend-analysis-viewer"));
@@ -237,6 +238,13 @@ export default function Dashboard() {
         <div>
           <Suspense fallback={<div className="h-64 flex items-center justify-center text-muted-foreground">Loading analytics...</div>}>
             <AdvancedAnalyticsDashboard />
+          </Suspense>
+        </div>
+
+        {/* Tableau Analytics Section - Real-Time Dashboard */}
+        <div>
+          <Suspense fallback={<div className="h-64 flex items-center justify-center text-muted-foreground">Loading Tableau dashboard...</div>}>
+            <RealtimeTableauDashboard />
           </Suspense>
         </div>
 

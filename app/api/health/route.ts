@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkDatabaseHealth } from "@/lib/db/client";
 
 /**
  * Health check endpoint for monitoring server status
@@ -6,12 +7,18 @@ import { NextResponse } from "next/server";
  */
 export async function GET() {
   try {
+    const dbHealth = await checkDatabaseHealth();
+    
     return NextResponse.json(
       {
         status: "ok",
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         environment: process.env.NODE_ENV || "development",
+        database: {
+          enabled: dbHealth,
+          status: dbHealth ? "connected" : "disabled",
+        },
       },
       { status: 200 }
     );

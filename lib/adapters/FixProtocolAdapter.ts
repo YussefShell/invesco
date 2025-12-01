@@ -168,6 +168,13 @@ export class FixProtocolAdapter implements IPortfolioDataProvider {
       if (fixData['35'] === '8') {
         const parsed = this.parseExecutionReport(fixData, rawFix);
         
+        // Persist to database (async, don't await to avoid blocking FIX processing)
+        import("@/lib/db/persistence-service").then(({ persistFixMessage }) => {
+          persistFixMessage(rawFix, parsed).catch((error) => {
+            console.error("[FIX-Adapter] Failed to persist FIX message:", error);
+          });
+        });
+        
         // Emit to callback if provided
         if (this.onFixMessage) {
           this.onFixMessage(rawFix, parsed);

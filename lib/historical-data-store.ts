@@ -246,6 +246,13 @@ class HistoricalDataStore {
       this.breachEvents = this.breachEvents.slice(-this.MAX_BREACH_EVENTS);
     }
 
+    // Persist to database (async, don't await to avoid blocking)
+    import("@/lib/db/persistence-service").then(({ persistBreachEvent }) => {
+      persistBreachEvent(breachEvent).catch((error) => {
+        console.error("[HistoricalDataStore] Failed to persist breach event:", error);
+      });
+    });
+
     // Auto-save to localStorage if initialized
     if (this.isInitialized) {
       this.saveToStorage();
@@ -280,6 +287,13 @@ class HistoricalDataStore {
     if (this.auditLogEntries.length > this.MAX_AUDIT_ENTRIES) {
       this.auditLogEntries = this.auditLogEntries.slice(-this.MAX_AUDIT_ENTRIES);
     }
+
+    // Persist to database (async, don't await to avoid blocking)
+    import("@/lib/db/persistence-service").then(({ persistAuditLogEntry }) => {
+      persistAuditLogEntry(rawLine, systemId, level || "INFO", message).catch((error) => {
+        console.error("[HistoricalDataStore] Failed to persist audit log entry:", error);
+      });
+    });
 
     // Auto-save to localStorage if initialized
     if (this.isInitialized) {

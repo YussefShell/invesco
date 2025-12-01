@@ -162,6 +162,13 @@ export class NotificationService {
 
             triggeredNotifications.push(notification);
             this.notificationHistory.push(notification);
+            
+            // Persist to database (async, don't await to avoid blocking)
+            import("@/lib/db/persistence-service").then(({ persistNotification }) => {
+              persistNotification(notification, recipient.name).catch((error) => {
+                console.error("[NotificationService] Failed to persist notification:", error);
+              });
+            });
             this.notificationCooldowns.set(cooldownKey, Date.now());
           }
         }
@@ -278,6 +285,15 @@ export class NotificationService {
       }
 
       notification.deliveredAt = new Date().toISOString();
+      
+      // Persist to database
+      try {
+        const { persistNotification } = await import("@/lib/db/persistence-service");
+        await persistNotification(notification, recipient.name);
+      } catch (error) {
+        console.error("[NotificationService] Failed to persist notification to database:", error);
+      }
+      
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
