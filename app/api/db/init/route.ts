@@ -6,11 +6,21 @@
  */
 
 import { NextResponse } from "next/server";
-import { initializeDatabase } from "@/lib/db/client";
+import { ensureDatabaseInitialized } from "@/lib/db/init-server";
+import { getDatabaseConfig } from "@/lib/db/client";
 
 export async function POST() {
   try {
-    const success = await initializeDatabase();
+    const config = getDatabaseConfig();
+    
+    if (!config.enabled) {
+      return NextResponse.json({
+        success: false,
+        message: "Database initialization skipped (not configured or disabled)",
+      }, { status: 200 }); // 200 because skipping is not an error
+    }
+
+    const success = await ensureDatabaseInitialized();
     
     if (success) {
       return NextResponse.json({
@@ -20,8 +30,8 @@ export async function POST() {
     } else {
       return NextResponse.json({
         success: false,
-        message: "Database initialization skipped (not configured or disabled)",
-      }, { status: 200 }); // 200 because skipping is not an error
+        message: "Database initialization failed - check server logs",
+      }, { status: 500 });
     }
   } catch (error) {
     console.error("Database initialization error:", error);
