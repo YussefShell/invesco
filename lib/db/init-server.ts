@@ -5,9 +5,54 @@
  * Gracefully falls back if database is unavailable.
  */
 
-import { sql } from "@vercel/postgres";
 import { getDatabaseConfig } from "./client";
 import { runMigrations } from "./migrations";
+
+// Get sql client - we'll import it dynamically to match client.ts logic
+let sql: any = null;
+
+// Initialize sql client using the same logic as client.ts
+function getSqlClient() {
+  if (sql) return sql;
+  
+  const config = getDatabaseConfig();
+  if (!config.enabled || !config.connectionString) {
+    // Try @vercel/postgres for Vercel auto-config
+    try {
+      const vercelPostgres = require("@vercel/postgres");
+      sql = vercelPostgres.sql;
+      return sql;
+    } catch (error) {
+      return null;
+    }
+  }
+  
+  // Use postgres.js for Supabase/external PostgreSQL
+  try {
+    const postgres = require("postgres");
+    const postgresOptions: any = {
+      max: 10,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    };
+    
+    if (config.connectionString.includes('supabase.co')) {
+      postgresOptions.ssl = { rejectUnauthorized: false };
+    }
+    
+    sql = postgres(config.connectionString, postgresOptions);
+    return sql;
+  } catch (error) {
+    // Fall back to @vercel/postgres
+    try {
+      const vercelPostgres = require("@vercel/postgres");
+      sql = vercelPostgres.sql;
+      return sql;
+    } catch (vercelError) {
+      return null;
+    }
+  }
+}
 
 let initialized = false;
 let initPromise: Promise<boolean> | null = null;
@@ -30,7 +75,8 @@ export async function ensureDatabaseInitialized(): Promise<boolean> {
       return false;
     }
 
-    if (!sql) {
+    const sqlClient = getSqlClient();
+    if (!sqlClient) {
       console.log("[DB] Database module not available, skipping initialization");
       return false;
     }
@@ -39,10 +85,10 @@ export async function ensureDatabaseInitialized(): Promise<boolean> {
       console.log("[DB] Initializing database...");
 
       // Test connection first
-      await sql`SELECT 1`;
+      await sqlClient`SELECT 1`;
 
       // Run migrations
-      await runMigrations(sql);
+      await runMigrations(sqlClient);
 
       initialized = true;
       initError = null;
