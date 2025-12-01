@@ -237,7 +237,7 @@ export default function HistoricalBreachViewer() {
     }
 
     return events;
-  }, [advancedFilterConfig, useAdvancedFilter, adaptiveSettings.isLowPower, refreshKey]);
+  }, [advancedFilterConfig, useAdvancedFilter, adaptiveSettings.isLowPower]);
 
   const statistics = useMemo(() => {
     const stats = {

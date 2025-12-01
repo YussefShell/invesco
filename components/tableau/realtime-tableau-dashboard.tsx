@@ -38,6 +38,30 @@ export default function RealtimeTableauDashboard() {
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const vizRef = useRef<any>(null);
 
+  const refreshTableauViz = useCallback(() => {
+    if (vizRef.current) {
+      // Force Tableau to refresh by updating the src
+      // The Tableau Embedding API v3 supports programmatic refresh
+      try {
+        // Access the Tableau Viz API if available
+        const viz = vizRef.current;
+        if (viz && typeof viz.refreshAsync === "function") {
+          viz.refreshAsync();
+        } else {
+          // Fallback: trigger a re-render by updating state
+          setTableauUrl((prev) => {
+            // Add a cache-busting parameter
+            const separator = prev.includes("?") ? "&" : "?";
+            return `${prev}${separator}_refresh=${Date.now()}`;
+          });
+        }
+      } catch (error) {
+        console.error("Error refreshing Tableau viz:", error);
+      }
+    }
+    setLastRefresh(new Date());
+  }, []);
+
   // Update Tableau data cache when holdings change
   useEffect(() => {
     let isMounted = true;
@@ -81,7 +105,7 @@ export default function RealtimeTableauDashboard() {
       isMounted = false;
       clearTimeout(timeout);
     };
-  }, [holdings, autoRefresh, tableauUrl]);
+  }, [holdings, autoRefresh, tableauUrl, refreshTableauViz]);
 
   // Auto-refresh Tableau dashboard every 30 seconds when enabled
   useEffect(() => {
@@ -102,31 +126,7 @@ export default function RealtimeTableauDashboard() {
         clearInterval(refreshIntervalRef.current);
       }
     };
-  }, [autoRefresh, tableauUrl]);
-
-  const refreshTableauViz = useCallback(() => {
-    if (vizRef.current) {
-      // Force Tableau to refresh by updating the src
-      // The Tableau Embedding API v3 supports programmatic refresh
-      try {
-        // Access the Tableau Viz API if available
-        const viz = vizRef.current;
-        if (viz && typeof viz.refreshAsync === "function") {
-          viz.refreshAsync();
-        } else {
-          // Fallback: trigger a re-render by updating state
-          setTableauUrl((prev) => {
-            // Add a cache-busting parameter
-            const separator = prev.includes("?") ? "&" : "?";
-            return `${prev}${separator}_refresh=${Date.now()}`;
-          });
-        }
-      } catch (error) {
-        console.error("Error refreshing Tableau viz:", error);
-      }
-    }
-    setLastRefresh(new Date());
-  }, []);
+  }, [autoRefresh, tableauUrl, refreshTableauViz]);
 
   const handleExportData = async () => {
     try {

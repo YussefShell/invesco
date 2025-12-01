@@ -232,7 +232,7 @@ export default function AdvancedAnalyticsDashboard() {
       avgTimeToBreach,
       topRiskHoldings,
     } as AnalyticsMetrics;
-  }, [holdings, timeRange, selectedJurisdiction, refreshKey]);
+  }, [holdings, timeRange, selectedJurisdiction]);
 
   const jurisdictions: Jurisdiction[] = ["USA", "UK", "Hong Kong", "APAC", "Other"];
 

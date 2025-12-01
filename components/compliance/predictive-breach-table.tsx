@@ -778,10 +778,10 @@ const PredictiveRow = forwardRef<HTMLTableRowElement, PredictiveRowProps>(functi
               variant={holding.reconStatus === "MATCH" ? "outline" : "warning"}
               className="text-xs ml-1"
               title={isClient && holding.lastReconTimestamp 
-                ? `Last Ledger Check: ${new Date(holding.lastReconTimestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` 
+                ? `Last Ledger Check: ${new Date(holding.lastReconTimestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}` 
                 : holding.lastReconTimestamp 
                   ? `Last Ledger Check: ${new Date(holding.lastReconTimestamp).toISOString()}` 
-                  : 'Last Ledger Check: N/A'}
+                  : "Last Ledger Check: N/A"}
             >
               {holding.reconStatus === "MATCH" ? "✓" : "⚠"} Recon
             </Badge>
@@ -845,7 +845,7 @@ const PredictiveRow = forwardRef<HTMLTableRowElement, PredictiveRowProps>(functi
             <span>{holding.buyingVelocity.toLocaleString()} shares/hr</span>
             <span 
               className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/30 font-semibold"
-              title="Simulated mock data. In production, this would be calculated from Invesco's order execution database."
+              title="Simulated mock data. In production, this would be calculated from Invesco&apos;s order execution database."
             >
               SIMULATED
             </span>

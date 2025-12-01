@@ -40,7 +40,7 @@ export default function TrendAnalysisViewer() {
     }
 
     return historicalDataStore.getTrendAnalysis(startTime, now.toISOString());
-  }, [timeRange, refreshKey]);
+  }, [timeRange]);
 
   const getTrendIcon = (trend: "increasing" | "decreasing" | "stable") => {
     switch (trend) {
