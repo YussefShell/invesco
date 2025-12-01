@@ -52,7 +52,7 @@ export async function GET() {
       });
     }
 
-    const sql = await getSqlClient();
+    const sql: any = await getSqlClient();
     if (!sql) {
       return NextResponse.json({
         enabled: true,
@@ -63,7 +63,7 @@ export async function GET() {
 
     // Test connection first
     try {
-      await sql`SELECT 1`;
+      await (sql as any)`SELECT 1`;
     } catch (error) {
       return NextResponse.json({
         enabled: true,
